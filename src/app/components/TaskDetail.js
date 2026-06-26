@@ -1,7 +1,9 @@
 'use client';
 /* Detalle de una tarea (modal) — aquí SÍ se muestra el mapa, además de
    la distancia a la persona y las acciones. La lista queda liviana. */
+import { useEffect, useState } from 'react';
 import { PRIOS, SKILLS, ZONES, ago, taskState, takenCount } from '@/lib/model';
+import * as store from '@/lib/store';
 import TaskMiniMap from './TaskMiniMap';
 
 const STATE_BADGE = {
@@ -12,7 +14,14 @@ const STATE_BADGE = {
 };
 const PRIO_HEX = { alta: '#e11d48', media: '#d97706', baja: '#0d9a6c' };
 
-export default function TaskDetail({ t, mode, distanceLabel, h, onClose }) {
+export default function TaskDetail({ t: t0, mode, distanceLabel, h, onClose }) {
+  // Estado en TIEMPO REAL del documento abierto (excepción permitida: 1 doc).
+  const [t, setT] = useState(t0);
+  useEffect(() => {
+    const unsub = store.subTask(t0.id, (d) => { if (d) setT(d); });
+    return () => unsub && unsub();
+  }, [t0.id]);
+
   const st = taskState(t);
   const taken = takenCount(t);
   const pct = Math.min(100, Math.round((taken / t.need) * 100));

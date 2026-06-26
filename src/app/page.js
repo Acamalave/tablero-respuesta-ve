@@ -195,8 +195,8 @@ export default function Page() {
         <div className="brand" onClick={() => setRole(null)} title="Volver al inicio">
           <span className="flag"><Flag size={40} /></span>
           <div className="brand-txt">
-            <h1>TABLERO DE <b>RESPUESTA</b></h1>
-            <span>Coordinación · Venezuela</span>
+            <h1>TAREA: <b>VENEZUELA</b></h1>
+            <span>Coordinación de respuesta</span>
           </div>
         </div>
         <div className="topbar-spacer" />
@@ -410,6 +410,7 @@ function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boa
 
 function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volTab, setVolTab, h, userPos, geoState, requestGeo }) {
   const [openId, setOpenId] = useState(null);
+  const [liveActive, setLiveActive] = useState(null); // tarea en foco en TIEMPO REAL
 
   // Pide ubicación al entrar al tablero (si no se ha intentado).
   useEffect(() => { if (geoState === 'idle') requestGeo(); }, [geoState, requestGeo]);
@@ -438,6 +439,21 @@ function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volT
   const active = mine.find((o) => o.mine.state === 'tomada' || o.mine.state === 'curso');
   const done = mine.filter((o) => o.mine.state === 'completada');
 
+  // Tiempo real (excepción permitida): escucha SOLO la tarea en foco.
+  const activeId = active?.t.id;
+  useEffect(() => {
+    if (!activeId) { setLiveActive(null); return undefined; }
+    const unsub = store.subTask(activeId, (d) => setLiveActive(d));
+    return () => unsub && unsub();
+  }, [activeId]);
+
+  // Datos en vivo de la tarea en foco (cae al valor cargado si aún no llega).
+  const activeT = (liveActive && liveActive.id === activeId) ? liveActive : active?.t;
+  const activeMine = activeT
+    ? (activeT.takenBy || []).find((x) => x.uid === user.uid && x.state !== 'soltada') || active?.mine
+    : null;
+  const activeCancelled = activeT && (activeT.status === 'cancelada' || activeT.state === 'cancelada');
+
   return (
     <>
       <div className="subtabs vol-tabs">
@@ -446,10 +462,16 @@ function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volT
       </div>
 
       {active ? (
-        <>
-          <div className="focus-note"><span>🎯</span><span>Tienes una tarea en curso. Termínala o déjala para ver y tomar otras.</span></div>
-          <div className="task-grid"><MyTaskCard t={active.t} mine={active.mine} online={online} contact={COORD_CONTACT} h={h} /></div>
-        </>
+        activeCancelled ? (
+          <div className="focus-note" style={{ background: 'var(--p-alta-bg)', borderColor: '#f6c9d4', color: 'var(--p-alta)' }}>
+            <span>⚠️</span><span>El coordinador canceló esta tarea. Pulsa <b>Actualizar</b> para ver otras.</span>
+          </div>
+        ) : (
+          <>
+            <div className="focus-note"><span>🎯</span><span>Tienes una tarea en curso. Su estado se actualiza en tiempo real. Termínala o déjala para ver otras.</span></div>
+            <div className="task-grid"><MyTaskCard t={activeT} mine={activeMine} online={online} contact={COORD_CONTACT} h={h} /></div>
+          </>
+        )
       ) : volTab === 'tablero' ? (
         <>
           {!userPos && (

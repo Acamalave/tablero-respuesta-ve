@@ -1,12 +1,12 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'Tablero de Respuesta · VE',
+  title: 'Tarea: Venezuela',
   description:
-    'Tablero vivo de coordinación de tareas para la respuesta al terremoto. La organización coordina; la gente toma tareas.',
+    'Coordinación de tareas para la respuesta al desastre. La organización coordina; la gente toma tareas.',
   manifest: '/manifest.webmanifest',
-  applicationName: 'Respuesta VE',
-  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Respuesta VE' },
+  applicationName: 'Tarea: Venezuela',
+  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Tarea: Venezuela' },
   icons: { icon: '/icons/icon.svg', apple: '/icons/icon.svg' },
   formatDetection: { telephone: false },
 };

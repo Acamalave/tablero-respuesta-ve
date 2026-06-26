@@ -19,7 +19,7 @@ function intlNumber(phone) {
 function waText(t, mine) {
   const yo = (mine && mine.name) || 'un voluntario';
   const a = t.reporterName ? `Hola ${t.reporterName}, ` : 'Hola, ';
-  const msg = `${a}soy ${yo}, voluntario del Tablero de Respuesta VE. ` +
+  const msg = `${a}soy ${yo}, voluntario de Tarea: Venezuela. ` +
     `Tomé tu reporte y voy a ayudar con: "${t.title}"${t.loc ? ` (${t.loc})` : ''}. ` +
     `Me pongo en contacto contigo para coordinar.`;
   return encodeURIComponent(msg);

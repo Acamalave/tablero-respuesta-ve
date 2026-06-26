@@ -12,7 +12,7 @@
 import { db, auth } from './firebase';
 import { signInAnonymously } from 'firebase/auth';
 import {
-  collection, doc, runTransaction, updateDoc, setDoc, getDoc,
+  collection, doc, onSnapshot, runTransaction, updateDoc, setDoc, getDoc,
   getDocs, getDocsFromServer, getCountFromServer, query, where, orderBy,
   limit, startAfter, writeBatch, enableNetwork, disableNetwork, increment,
 } from 'firebase/firestore';
@@ -75,6 +75,11 @@ export async function fetchBoard(after = null) {
   const docs = snap.docs;
   return { rows: docs.map(row), last: docs[docs.length - 1] || null, more: docs.length === PAGE };
 }
+
+// EXCEPCIÓN permitida (regla #1): listener en tiempo real sobre UN SOLO
+// documento (la tarea en foco/abierta). Nunca sobre el tablero completo.
+export const subTask = (id, cb) =>
+  onSnapshot(doc(TASKS, id), (s) => cb(s.exists() ? row(s) : null), () => cb(null));
 
 // "Mis tareas": solo las del usuario (array-contains) — no escanea el tablero.
 export async function fetchMyTasks(uid) {
