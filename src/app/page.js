@@ -15,11 +15,16 @@ import {
 import * as store from '@/lib/store';
 
 const VOL_KEY = 'tablero_vol_v1';
+const ADMIN_KEY = 'tablero_admin_v1';
+// Código de acceso del coordinador (solo la organización). Cámbialo aquí.
+// Nota: es una compuerta de demo del lado del cliente; en producción usar
+// Firebase Auth con custom claims por rol.
+const ADMIN_CODE = 'caritas2026';
 
+// Solo dos roles públicos: el coordinador es acceso de administrador.
 const ROLES = [
-  { key: 'coordinador', icon: '🧭', title: 'Coordinador', desc: 'Creo, priorizo y superviso las tareas. Veo todo: tablero, voluntarios y mapa.', rc: '#1E6BE6', rcbg: '#eaf1fd', go: 'Entrar al panel' },
-  { key: 'voluntario', icon: '🙋', title: 'Voluntario', desc: 'Veo las tareas abiertas cerca de mí y tomo la que puedo hacer.', rc: '#E0A800', rcbg: '#fef6da', go: 'Quiero ayudar' },
-  { key: 'reportante', icon: '📢', title: 'Reportar', desc: 'Aviso de una necesidad. No necesito cuenta; el coordinador la revisa.', rc: '#E4002B', rcbg: '#ffeef1', go: 'Reportar algo' },
+  { key: 'voluntario', icon: '🙋', title: 'Voluntario', desc: 'Veo tareas abiertas cerca de mí y tomo la que puedo hacer.', rc: '#E0A800', rcbg: '#fef6da', go: 'Quiero ayudar' },
+  { key: 'reportante', icon: '📢', title: 'Reportar', desc: 'Aviso de una necesidad. Sin cuenta; la organización la revisa.', rc: '#E4002B', rcbg: '#ffeef1', go: 'Reportar algo' },
 ];
 
 export default function Page() {
@@ -34,6 +39,8 @@ export default function Page() {
   const [coordTab, setCoordTab] = useState('tablero');
   const [volTab, setVolTab] = useState('tablero');
   const [vol, setVol] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminGate, setAdminGate] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [modal, setModal] = useState(null);
   const [, forceTick] = useState(0);
@@ -56,7 +63,8 @@ export default function Page() {
       unsubs.push(store.subVolunteers((rows) => setVolunteers(rows)));
       try {
         const saved = JSON.parse(localStorage.getItem(VOL_KEY) || 'null');
-        if (saved) setVol({ ...saved, uid: myUid });
+        if (saved) { setVol({ ...saved, uid: myUid }); store.upsertVolunteer({ ...saved, uid: myUid }); }
+        if (localStorage.getItem(ADMIN_KEY) === '1') setIsAdmin(true);
       } catch {}
       setReady(true);
     })();
@@ -101,7 +109,7 @@ export default function Page() {
         </div>
         <div className="topbar-spacer" />
         {role && (
-          <button className="role-back" onClick={() => setRole(null)}><span className="pin">⇆</span> Cambiar rol</button>
+          <button className="role-back" onClick={() => setRole(null)}><span className="pin">⇆</span><span className="rb-text">Cambiar rol</span></button>
         )}
         <button className={`netchip ${!online ? 'off' : fromCache ? 'syncing' : ''}`} onClick={toggleNet} title="Alternar conexión (offline-first)">
           <span className="dot" />
@@ -113,7 +121,11 @@ export default function Page() {
         {!ready ? (
           <div className="boot"><div><div className="ring" /><div className="txt">Conectando con el tablero…</div></div></div>
         ) : !role ? (
-          <RoleLanding onPick={(r) => { setRole(r); setCoordTab('tablero'); setVolTab('tablero'); }} />
+          <RoleLanding
+            onPick={(r) => { setRole(r); setVolTab('tablero'); }}
+            isAdmin={isAdmin}
+            onCoordinator={() => { if (isAdmin) { setRole('coordinador'); setCoordTab('tablero'); } else setAdminGate(true); }}
+          />
         ) : role === 'coordinador' ? (
           <Coordinador {...{ tasks, reports, volunteers, coordTab, setCoordTab, h, openCreate: (p) => setModal({ prefill: p || null }), onConvert: (r) => setModal({ prefill: r }), onDiscard: (id) => store.setReportStatus(id, 'descartado') }} />
         ) : role === 'voluntario' ? (
@@ -125,7 +137,12 @@ export default function Page() {
         )}
       </main>
 
-      <p className="demo-note">Tiempo real con <b>Firebase Firestore</b> · ábrela en dos ventanas y verás el tablero actualizarse en vivo · prueba <b>Sin red</b> para el modo offline</p>
+      {role && <p className="demo-note">Tiempo real con <b>Firebase Firestore</b> · ábrela en dos ventanas y verás el tablero actualizarse en vivo · prueba <b>Sin red</b> para el modo offline</p>}
+
+      {adminGate && <AdminGate onClose={() => setAdminGate(false)} onOk={() => {
+        try { localStorage.setItem(ADMIN_KEY, '1'); } catch {}
+        setIsAdmin(true); setAdminGate(false); setRole('coordinador'); setCoordTab('tablero');
+      }} />}
 
       {modal && <CreateModal prefill={modal.prefill} onClose={() => setModal(null)} onSave={async (data, prefill) => {
         await store.createTask(data);
@@ -149,13 +166,13 @@ export default function Page() {
 /* ====================================================================
    PANTALLA INICIAL — selección de rol (3 botones flotantes)
    ==================================================================== */
-function RoleLanding({ onPick }) {
+function RoleLanding({ onPick, isAdmin, onCoordinator }) {
   return (
     <section className="landing view">
       <div className="landing-head">
         <div className="eyebrow">Respuesta coordinada al desastre</div>
-        <h2>¿Cómo quieres ayudar hoy?</h2>
-        <p>Elige tu rol para empezar. La organización coordina y la gente toma tareas concretas — sin caos.</p>
+        <h2>¿Cómo quieres ayudar?</h2>
+        <p>Elige una opción para empezar.</p>
       </div>
       <div className="role-grid">
         {ROLES.map((r) => (
@@ -167,7 +184,37 @@ function RoleLanding({ onPick }) {
           </button>
         ))}
       </div>
+      <div className="admin-row">
+        <button className={`admin-link ${isAdmin ? 'granted' : ''}`} onClick={onCoordinator}>
+          {isAdmin ? '🧭 Entrar como coordinador' : '🔒 Acceso del coordinador'}
+        </button>
+      </div>
     </section>
+  );
+}
+
+function AdminGate({ onClose, onOk }) {
+  const [pin, setPin] = useState('');
+  const [err, setErr] = useState(false);
+  const submit = () => { if (pin.trim() === ADMIN_CODE) onOk(); else setErr(true); };
+  return (
+    <div className="modal-bg show" onClick={(e) => { if (e.target.classList.contains('modal-bg')) onClose(); }}>
+      <div className="modal" style={{ maxWidth: 400 }}>
+        <h3>Acceso del coordinador</h3>
+        <div className="sub">Solo para la organización</div>
+        <div className="field">
+          <label>Código de acceso</label>
+          <input className={`input ${err ? 'invalid' : ''}`} type="password" value={pin} autoFocus
+            onChange={(e) => { setPin(e.target.value); setErr(false); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} placeholder="••••••••" />
+          {err && <div style={{ color: 'var(--ve-red)', fontSize: 12.5, marginTop: 8, fontWeight: 600 }}>Código incorrecto</div>}
+        </div>
+        <div className="actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={submit}>Entrar</button>
+        </div>
+      </div>
+    </div>
   );
 }
 

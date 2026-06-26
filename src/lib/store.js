@@ -114,7 +114,9 @@ export const cancelTask = (taskId) => updateDoc(doc(TASKS, taskId), { status: 'c
 
 /* ----- Voluntarios ----- */
 export async function upsertVolunteer(v) {
-  await setDoc(doc(VOLS, v.uid), { name: v.name, zone: v.zone, skills: v.skills, done: v.done || 0 }, { merge: true });
+  const data = { name: v.name, zone: v.zone, skills: v.skills || [] };
+  if (typeof v.done === 'number') data.done = v.done; // solo en el registro; no pisa el aporte al recargar
+  await setDoc(doc(VOLS, v.uid), data, { merge: true });
 }
 export const bumpVolunteerDone = (uid) =>
   updateDoc(doc(VOLS, uid), { done: increment(1) }).catch(() => {});

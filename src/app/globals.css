@@ -73,8 +73,9 @@ body::before {
 .topbar {
   position: sticky; top: 0; z-index: 60;
   display: flex; align-items: center; gap: 16px;
-  padding: 16px 0 14px;
-  background: linear-gradient(180deg, var(--bg) 60%, transparent);
+  padding: 14px 0 12px;
+  background: var(--bg);
+  box-shadow: 0 6px 16px -12px rgba(24,32,48,.3);
 }
 .brand { display: flex; align-items: center; gap: 12px; cursor: pointer; }
 .brand .flag {
@@ -112,45 +113,46 @@ body::before {
 .role-back:hover { border-color: var(--border-strong); color: var(--ink); }
 .role-back .pin { display: inline-flex; align-items: center; gap: 6px; color: var(--ve-blue); }
 
-/* ===================== Landing de roles ===================== */
-.landing { min-height: calc(100vh - 220px); display: flex; flex-direction: column; justify-content: center; padding: 28px 0; }
-.landing-head { text-align: center; margin-bottom: 38px; }
-.landing-head .eyebrow { font-size: 13px; font-weight: 600; color: var(--ve-blue); letter-spacing: .02em; }
-.landing-head h2 { font-family: var(--font-display); font-weight: 900; font-size: clamp(28px, 5vw, 42px); line-height: 1.05; margin-top: 10px; letter-spacing: -.02em; }
-.landing-head p { color: var(--ink-soft); font-size: 16px; margin-top: 14px; max-width: 540px; margin-inline: auto; line-height: 1.5; }
+/* ===================== Landing de roles (2 íconos, sin scroll) ===================== */
+.landing { min-height: calc(100dvh - 132px); display: flex; flex-direction: column; justify-content: center; padding: 10px 0 16px; }
+.landing-head { text-align: center; margin-bottom: 24px; }
+.landing-head .eyebrow { font-size: 12.5px; font-weight: 600; color: var(--ve-blue); letter-spacing: .02em; }
+.landing-head h2 { font-family: var(--font-display); font-weight: 900; font-size: clamp(24px, 6vw, 38px); line-height: 1.05; margin-top: 8px; letter-spacing: -.02em; }
+.landing-head p { color: var(--ink-soft); font-size: 15px; margin-top: 9px; max-width: 440px; margin-inline: auto; line-height: 1.45; }
 
-.role-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; max-width: 920px; width: 100%; margin: 0 auto; }
+.role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 580px; width: 100%; margin: 0 auto; }
 .role-card {
-  position: relative; text-align: left; cursor: pointer;
+  position: relative; text-align: center; cursor: pointer;
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: 22px; padding: 26px 24px 24px;
+  border-radius: 20px; padding: 24px 16px 22px;
   box-shadow: var(--shadow); transition: transform .3s var(--ease), box-shadow .3s var(--ease), border-color .3s var(--ease);
-  animation: floaty 6s ease-in-out infinite;
-  overflow: hidden;
+  overflow: hidden; display: flex; flex-direction: column; align-items: center;
 }
 .role-card::before {
   content: ''; position: absolute; left: 0; top: 0; right: 0; height: 5px;
-  background: var(--rc, var(--ve-blue-bright));
-  opacity: 0; transition: opacity .3s var(--ease);
+  background: var(--rc, var(--ve-blue-bright)); opacity: 0; transition: opacity .3s var(--ease);
 }
-.role-card:hover { transform: translateY(-8px); box-shadow: var(--shadow-lg); border-color: transparent; animation-play-state: paused; }
+.role-card:hover { transform: translateY(-6px); box-shadow: var(--shadow-lg); border-color: transparent; }
 .role-card:hover::before { opacity: 1; }
-.role-card:nth-child(2) { animation-delay: .8s; }
-.role-card:nth-child(3) { animation-delay: 1.6s; }
-@keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
 
 .role-card .ic {
-  width: 58px; height: 58px; border-radius: 16px; display: grid; place-items: center;
-  font-size: 28px; background: var(--rc-bg, var(--surface-2)); margin-bottom: 18px;
+  width: 60px; height: 60px; border-radius: 18px; display: grid; place-items: center;
+  font-size: 30px; background: var(--rc-bg, var(--surface-2)); margin-bottom: 14px;
 }
-.role-card h3 { font-family: var(--font-display); font-weight: 800; font-size: 20px; }
-.role-card p { color: var(--ink-soft); font-size: 14px; line-height: 1.5; margin-top: 8px; min-height: 42px; }
+.role-card h3 { font-family: var(--font-display); font-weight: 800; font-size: 18px; }
+.role-card p { color: var(--ink-soft); font-size: 13.5px; line-height: 1.45; margin-top: 7px; }
 .role-card .go {
-  margin-top: 16px; display: inline-flex; align-items: center; gap: 8px;
-  font-weight: 700; font-size: 14px; color: var(--rc, var(--ve-blue-bright));
+  margin-top: 14px; display: inline-flex; align-items: center; gap: 7px;
+  font-weight: 700; font-size: 13.5px; color: var(--rc, var(--ve-blue-bright));
 }
 .role-card .go .arr { transition: transform .25s var(--ease); }
 .role-card:hover .go .arr { transform: translateX(4px); }
+
+/* Acceso discreto del coordinador (solo admin) */
+.admin-row { text-align: center; margin-top: 22px; }
+.admin-link { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--ink-faint); background: none; border: 0; cursor: pointer; padding: 8px 14px; border-radius: 999px; transition: color .2s var(--ease); }
+.admin-link:hover { color: var(--ve-blue); }
+.admin-link.granted { color: var(--ve-blue); background: #eaf1fd; }
 
 /* ===================== Cabeceras de sección ===================== */
 .section-head { display: flex; align-items: center; gap: 12px; margin: 24px 2px 16px; }
@@ -396,16 +398,34 @@ textarea.input { resize: vertical; min-height: 84px; }
 /* ===================== Responsive ===================== */
 @media (max-width: 880px) {
   .stats { grid-template-columns: 1fr 1fr; }
-  .role-grid { grid-template-columns: 1fr; max-width: 460px; }
-  .role-card { animation: none; }
 }
 @media (max-width: 560px) {
-  .app { padding: 0 14px 100px; }
-  .topbar { flex-wrap: wrap; gap: 10px; }
+  .app { padding: 0 14px 90px; }
+  .topbar { gap: 8px; }
+  .brand-txt span { display: none; }
+  .brand-txt h1 { font-size: 13.5px; }
+  .brand .flag { width: 36px; height: 36px; }
+  .role-back { padding: 8px 11px; }
+  .role-back .rb-text { display: none; }
+  .netchip { padding: 7px 11px; font-size: 11px; }
+  .section-head { flex-wrap: wrap; gap: 8px; }
+  .section-head .rule { display: none; }
+  .section-head > .btn { width: 100%; order: 5; }
+  .stats { gap: 10px; }
   .task-grid { grid-template-columns: 1fr; }
   .g2 { grid-template-columns: 1fr; }
   .vol-head .aporte { margin-left: 0; }
   .toasts { left: 14px; right: 14px; max-width: none; }
   .stepper .stp { width: 64px; }
   .stepper .stp .lab { font-size: 10.5px; }
+  /* landing: dos íconos lado a lado, compactos, sin scroll */
+  .landing { min-height: calc(100dvh - 116px); padding: 6px 0 12px; }
+  .landing-head { margin-bottom: 18px; }
+  .landing-head p { font-size: 13.5px; }
+  .role-grid { gap: 11px; }
+  .role-card { padding: 20px 11px 18px; border-radius: 18px; }
+  .role-card .ic { width: 50px; height: 50px; font-size: 25px; border-radius: 15px; margin-bottom: 11px; }
+  .role-card h3 { font-size: 15.5px; }
+  .role-card p { font-size: 12px; line-height: 1.4; margin-top: 5px; }
+  .role-card .go { margin-top: 11px; font-size: 12.5px; }
 }
