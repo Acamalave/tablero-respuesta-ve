@@ -183,6 +183,8 @@ export default function Page() {
     release: async (id) => { await store.releaseTask(id, uid); await refresh(); pushToast('Tarea liberada', 'Vuelve a estar disponible para otro voluntario.', '↩️', 'Aviso'); },
     cyclePrio: async (id, cur) => { await store.cyclePrio(id, cur); await refresh(); },
     cancel: async (id) => { await store.cancelTask(id); await refresh(); pushToast('Tarea cerrada', 'Salió del tablero activo.', '🗑️', 'Coordinador'); },
+    // Coordinador: cancela la asignación de UNA persona; la tarea vuelve a estar disponible.
+    unassign: async (id, targetUid, name) => { await store.releaseTask(id, targetUid); await refresh(); pushToast('Asignación cancelada', `${name || 'La persona'} ya no tiene esta tarea — vuelve a estar disponible.`, '↩️', 'Coordinador'); },
   };
 
   const sendReport = async (data) => {

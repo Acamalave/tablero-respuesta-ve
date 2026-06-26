@@ -31,6 +31,8 @@ export default function TaskDetail({ t: t0, mode, distanceLabel, h, onClose }) {
 
   const close = (e) => { if (e.target.classList.contains('modal-bg')) onClose(); };
   const take = () => { h.take(t.id); onClose(); };
+  // Personas con la tarea activa (para que el coordinador pueda cancelarles la asignación).
+  const activeTakers = (t.takenBy || []).filter((x) => x.state !== 'completada' && x.state !== 'soltada');
 
   return (
     <div className="modal-bg show" onClick={close}>
@@ -56,6 +58,21 @@ export default function TaskDetail({ t: t0, mode, distanceLabel, h, onClose }) {
         <div className="foot" style={{ marginTop: 12 }}>
           <span className={`state-badge ${cls}`}><span className="led" />{label}</span>
         </div>
+
+        {mode === 'coord' && activeTakers.length > 0 && (
+          <div className="assignees">
+            <div className="assignees-title">Personas asignadas ({activeTakers.length})</div>
+            {activeTakers.map((x) => (
+              <div className="assignee" key={x.uid}>
+                <div className="as-info">
+                  <b>{x.name}</b>
+                  <span className={`as-state st-${x.state}`}>{x.state === 'curso' ? 'En curso' : 'Tomada'}</span>
+                </div>
+                <button className="btn btn-danger btn-sm" onClick={() => h.unassign(t.id, x.uid, x.name)}>Cancelar asignación</button>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="actions">
           <button className="btn btn-ghost" onClick={onClose}>Cerrar</button>

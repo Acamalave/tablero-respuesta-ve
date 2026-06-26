@@ -275,6 +275,17 @@ body::before {
 .dm-row .dm-v { font-size: 14px; color: var(--ink); }
 .dm-row .dm-v b { font-weight: 700; }
 
+/* Personas asignadas (coordinador puede cancelar la asignación) */
+.assignees { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 14px; display: flex; flex-direction: column; gap: 9px; }
+.assignees-title { font-family: var(--font-display); font-weight: 800; font-size: 13px; color: var(--ink); margin-bottom: 2px; }
+.assignee { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+.assignee .as-info { display: flex; align-items: center; gap: 9px; min-width: 0; flex-wrap: wrap; }
+.assignee .as-info b { font-size: 14px; }
+.assignee .as-state { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.assignee .as-state.st-tomada { color: var(--ve-blue); background: #eaf1fd; }
+.assignee .as-state.st-curso { color: var(--p-media); background: var(--p-media-bg); }
+.assignee .btn { flex-shrink: 0; }
+
 .state-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
 .state-badge .led { width: 6px; height: 6px; border-radius: 50%; }
 .state-abierta    { color: var(--p-baja); background: var(--p-baja-bg); }
