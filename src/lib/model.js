@@ -18,12 +18,24 @@ export function dist(a, b) {
   return Math.hypot(za.x - zb.x, za.y - zb.y);
 }
 
+// Habilidades / recursos que una persona puede ofrecer, en sintonía con la
+// respuesta a un terremoto (rescate fuera de alcance; aquí: acción y apoyo).
 export const SKILLS = {
-  vehiculo:  { label: 'Vehículo',          icon: '🚙' },
-  fuerza:    { label: 'Fuerza física',     icon: '💪' },
-  cocina:    { label: 'Cocina',            icon: '🍳' },
-  primeros:  { label: 'Primeros auxilios', icon: '🩹' },
-  logistica: { label: 'Logística',         icon: '📦' },
+  vehiculo:       { label: 'Vehículo',               icon: '🚙' },
+  traslado:       { label: 'Traslado de personas',   icon: '🚐' },
+  fuerza:         { label: 'Fuerza física',          icon: '💪' },
+  construccion:   { label: 'Construcción / escombros', icon: '🔨' },
+  electricidad:   { label: 'Electricidad',           icon: '⚡' },
+  agua:           { label: 'Agua y saneamiento',     icon: '🚰' },
+  cocina:         { label: 'Cocina',                 icon: '🍳' },
+  donaciones:     { label: 'Donaciones',             icon: '🎁' },
+  primeros:       { label: 'Primeros auxilios',      icon: '🩹' },
+  medico:         { label: 'Atención médica',        icon: '🏥' },
+  psicologico:    { label: 'Apoyo emocional',        icon: '🧠' },
+  cuidado:        { label: 'Cuidado de personas',    icon: '👶' },
+  comunicaciones: { label: 'Comunicaciones',         icon: '📡' },
+  refugio:        { label: 'Refugio / alojamiento',  icon: '🏠' },
+  logistica:      { label: 'Logística',              icon: '📦' },
 };
 
 export const PRIOS = {
