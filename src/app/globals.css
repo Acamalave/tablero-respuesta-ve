@@ -107,6 +107,8 @@ body::before {
 .netchip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--p-baja); }
 .netchip.off { color: var(--p-media); border-color: #f3d9b3; background: var(--p-media-bg); }
 .netchip.off .dot { background: var(--p-media); animation: pulse 1.4s infinite; }
+.netchip.live { cursor: default; }
+.netchip.live .dot { background: var(--p-baja); animation: pulse 2.2s infinite; }
 @keyframes pulse { 50% { opacity: .35; } }
 
 /* botón sutil para volver a elegir rol */
@@ -120,8 +122,10 @@ body::before {
 .role-back:hover { border-color: var(--border-strong); color: var(--ink); }
 .role-back .pin { display: inline-flex; align-items: center; gap: 6px; color: var(--ve-blue); }
 
-/* ===================== Landing de roles (2 íconos, sin scroll) ===================== */
-.landing { min-height: calc(100dvh - 96px); display: flex; flex-direction: column; justify-content: flex-start; padding: clamp(18px, 5vh, 60px) 0 18px; }
+/* ===================== Landing de roles (2 íconos, centrado) ===================== */
+.landing { min-height: calc(100dvh - 96px); display: flex; flex-direction: column; padding: 10px 0 14px; }
+.landing-center { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.landing-bottom { margin-top: 14px; }
 .landing-head { text-align: center; margin-bottom: 24px; }
 .landing-head .eyebrow { font-size: 12.5px; font-weight: 600; color: var(--ve-blue); letter-spacing: .02em; }
 .landing-head h2 { font-family: var(--font-display); font-weight: 900; font-size: clamp(24px, 6vw, 38px); line-height: 1.05; margin-top: 8px; letter-spacing: -.02em; }
@@ -155,12 +159,14 @@ body::before {
 .role-card .go .arr { transition: transform .25s var(--ease); }
 .role-card:hover .go .arr { transform: translateX(4px); }
 
-/* Acceso discreto del coordinador (solo admin) */
-.admin-row { text-align: center; margin-top: 18px; }
+/* Acceso del coordinador: solo un emoji discreto al final */
+.admin-emoji { display: block; margin: 12px auto 0; font-size: 18px; line-height: 1; background: none; border: 0; cursor: pointer; padding: 8px; opacity: .3; transition: opacity .25s var(--ease); }
+.admin-emoji:hover { opacity: .9; }
+.admin-emoji.granted { opacity: .85; }
 
 /* Disclaimer de responsabilidad — anclado al fondo del home */
 .home-disclaimer {
-  margin-top: auto; max-width: 620px; width: 100%; margin-inline: auto;
+  max-width: 620px; width: 100%; margin-inline: auto;
   padding-top: 16px; border-top: 1px solid var(--border);
   display: flex; gap: 11px; align-items: flex-start; text-align: left;
 }
@@ -168,9 +174,6 @@ body::before {
 .home-disclaimer p { font-size: 12.5px; color: var(--ink-faint); line-height: 1.5; }
 .home-disclaimer p b { color: var(--ink-soft); font-weight: 700; }
 .home-disclaimer .hd-strong { color: var(--ve-blue); font-family: var(--font-display); font-weight: 800; }
-.admin-link { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--ink-faint); background: none; border: 0; cursor: pointer; padding: 8px 14px; border-radius: 999px; transition: color .2s var(--ease); }
-.admin-link:hover { color: var(--ve-blue); }
-.admin-link.granted { color: var(--ve-blue); background: #eaf1fd; }
 
 /* ===================== Cabeceras de sección ===================== */
 .section-head { display: flex; align-items: center; gap: 12px; margin: 24px 2px 16px; }
@@ -363,6 +366,15 @@ textarea.input { resize: vertical; min-height: 84px; }
 .prof-stats .ps.help b { color: var(--ve-blue); }
 .prof-stats .ps.rep b { color: var(--ve-red); }
 .prof-stats .ps span { display: block; font-size: 10.5px; font-weight: 600; color: var(--ink-faint); margin-top: 4px; }
+.prof-stats button.ps { font: inherit; color: inherit; cursor: pointer; transition: border-color .2s var(--ease), background .2s var(--ease); }
+.prof-stats button.ps:hover { border-color: var(--ve-blue); background: #eaf1fd; }
+
+/* Mensaje motivador al completar una tarea */
+.celebrate { text-align: center; padding: 40px 26px 30px; max-width: 470px; margin: 16px auto 0; }
+.celebrate .cel-emoji { font-size: 52px; line-height: 1; }
+.celebrate h2 { font-family: var(--font-display); font-weight: 900; font-size: 24px; margin-top: 12px; letter-spacing: -.01em; }
+.celebrate p { color: var(--ink-soft); font-size: 15px; line-height: 1.55; margin: 12px auto 22px; }
+.celebrate .btn { min-width: 240px; }
 
 /* Perfil sin avatar — solo los datos */
 .prof-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 16px 18px; margin-bottom: 14px; }
@@ -529,7 +541,6 @@ textarea.input { resize: vertical; min-height: 84px; }
   .role-card h3 { font-size: 15.5px; }
   .role-card p { font-size: 12px; line-height: 1.4; margin-top: 5px; }
   .role-card .go { margin-top: 10px; font-size: 12.5px; }
-  .admin-row { margin-top: 16px; }
   .home-disclaimer { padding-top: 13px; gap: 9px; }
   .home-disclaimer .hd-flag { font-size: 16px; }
   .home-disclaimer p { font-size: 11.5px; line-height: 1.45; }

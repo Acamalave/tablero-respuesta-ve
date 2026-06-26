@@ -47,9 +47,10 @@ export default function Page() {
   const [stats, setStats] = useState({ abiertas: 0, encurso: 0, completadas: 0, pend: 0 });
   const [me, setMe] = useState({});                // perfil propio (contadores)
   const [refreshing, setRefreshing] = useState(false);
-  const [online, setOnline] = useState(true);
+  const [online] = useState(true);
   const [coordTab, setCoordTab] = useState('tablero');
-  const [volTab, setVolTab] = useState('tablero');
+  const [volView, setVolView] = useState('board');  // 'board' | 'completadas'
+  const [visitors, setVisitors] = useState(1000); // valor estable para SSR; se aleatoriza en cliente
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminGate, setAdminGate] = useState(false);
@@ -94,7 +95,16 @@ export default function Page() {
   // Móvil: vuelve al tope al cambiar de pantalla / pestaña / aceptar tarea / registrarse.
   useEffect(() => {
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-  }, [role, mode, volTab, coordTab, user, ready]);
+  }, [role, mode, volView, coordTab, user, ready]);
+
+  // Contador de "personas ayudando" — simulado, se mueve de a poco entre 900 y 1200.
+  useEffect(() => {
+    setVisitors(900 + Math.floor(Math.random() * 301)); // aleatorio inicial SOLO en cliente
+    const id = setInterval(() => {
+      setVisitors((v) => Math.max(900, Math.min(1200, v + (Math.floor(Math.random() * 7) - 3))));
+    }, 4500);
+    return () => clearInterval(id);
+  }, []);
 
   const counters = { done: me.done || 0, reports: me.reports || 0 };
 
@@ -147,18 +157,11 @@ export default function Page() {
     );
   }, []);
 
-  async function toggleNet() {
-    const next = !online;
-    setOnline(next);
-    if (next) { await store.goOnline(); pushToast('Conexión restablecida', 'Sincronizando cambios pendientes…', '📶', 'Red'); }
-    else { await store.goOffline(); pushToast('Sin red', 'Tus acciones se guardan local y se sincronizan al reconectar.', '📴', 'Sin conexión'); }
-  }
-
   const h = {
     take: async (id) => {
       try {
         const r = await store.takeTask(id, { name: user.name, uid });
-        if (r === 'ok') { setVolTab('mis'); pushToast('Tomaste esta tarea', 'La encuentras en "Mis tareas" con sus fases.', '✅', online ? 'Confirmado' : 'Pendiente'); }
+        if (r === 'ok') { pushToast('Tomaste esta tarea', 'Aquí la tienes con su estado y el contacto.', '✅', 'Confirmado'); }
         await refresh();
       } catch (e) {
         if (String(e.message).includes('cupo')) pushToast('Cupo lleno', 'Otra persona tomó el último cupo.', '⚠️', 'Aviso');
@@ -199,15 +202,14 @@ export default function Page() {
           </div>
         </div>
         <div className="topbar-spacer" />
-        {role && <button className="role-back" onClick={() => setRole(null)}><span className="pin">⇆</span><span className="rb-text">Inicio</span></button>}
         {role && <button className="role-back" onClick={refresh} disabled={refreshing} title="Actualizar el tablero">
           <span className="pin" style={{ display: 'inline-block', animation: refreshing ? 'spin .8s linear infinite' : 'none' }}>↻</span>
           <span className="rb-text">{refreshing ? 'Actualizando' : 'Actualizar'}</span>
         </button>}
-        <button className={`netchip ${!online ? 'off' : ''}`} onClick={toggleNet} title="Alternar conexión (offline-first)">
+        <div className="netchip live" title="Personas ayudando ahora">
           <span className="dot" />
-          <span>{online ? 'En línea' : 'Sin red'}</span>
-        </button>
+          <span>{visitors.toLocaleString('es-VE')} ayudando</span>
+        </div>
       </header>
 
       <main>
@@ -215,14 +217,14 @@ export default function Page() {
           <div className="boot"><div><div className="ring" /><div className="txt">Conectando con el tablero…</div></div></div>
         ) : !role ? (
           <RoleLanding
-            onPick={(r) => { setRole('usuario'); setMode(r); setVolTab('tablero'); }}
+            onPick={(r) => { setRole('usuario'); setMode(r); setVolView('board'); }}
             isAdmin={isAdmin}
             onCoordinator={() => { if (isAdmin) { setRole('coordinador'); setCoordTab('tablero'); } else setAdminGate(true); }}
           />
         ) : role === 'coordinador' ? (
           <Coordinador {...{ tasks, reports, volunteers, stats, boardMore, loadMore, coordTab, setCoordTab, h, openCreate: (p) => setModal({ prefill: p || null }), onConvert: (r) => setModal({ prefill: r }), onDiscard: async (id) => { await store.setReportStatus(id, 'descartado'); refresh(); } }} />
         ) : user ? (
-          <Usuario {...{ user: { ...user, uid }, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, uid, online, volTab, setVolTab, h, onSendReport: sendReport, userPos, geoState, requestGeo }} />
+          <Usuario {...{ user: { ...user, uid }, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, uid, online, volView, setVolView, h, onSendReport: sendReport, userPos, geoState, requestGeo }} />
         ) : (
           <Registro initialMode={mode} onDone={register} />
         )}
@@ -270,33 +272,38 @@ export default function Page() {
 function RoleLanding({ onPick, isAdmin, onCoordinator }) {
   return (
     <section className="landing view">
-      <div className="landing-head">
-        <div className="eyebrow">Respuesta coordinada al desastre</div>
-        <h2>¿Cómo quieres ayudar?</h2>
-        <p>Elige una opción para empezar.</p>
+      {/* Bloque centrado vertical y horizontalmente */}
+      <div className="landing-center">
+        <div className="landing-head">
+          <div className="eyebrow">Respuesta coordinada al desastre</div>
+          <h2>¿Cómo quieres ayudar?</h2>
+          <p>Elige una opción para empezar.</p>
+        </div>
+        <div className="role-grid">
+          {ROLES.map((r) => (
+            <button key={r.key} className="role-card" style={{ '--rc': r.rc, '--rc-bg': r.rcbg }} onClick={() => onPick(r.key)}>
+              <div className="ic">{r.icon}</div>
+              <h3>{r.title}</h3>
+              <p>{r.desc}</p>
+              <span className="go">{r.go} <span className="arr">→</span></span>
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="role-grid">
-        {ROLES.map((r) => (
-          <button key={r.key} className="role-card" style={{ '--rc': r.rc, '--rc-bg': r.rcbg }} onClick={() => onPick(r.key)}>
-            <div className="ic">{r.icon}</div>
-            <h3>{r.title}</h3>
-            <p>{r.desc}</p>
-            <span className="go">{r.go} <span className="arr">→</span></span>
-          </button>
-        ))}
-      </div>
-      <div className="admin-row">
-        <button className={`admin-link ${isAdmin ? 'granted' : ''}`} onClick={onCoordinator}>
-          {isAdmin ? '🧭 Entrar como coordinador' : '🔒 Acceso del coordinador'}
+
+      {/* Pie: disclaimer + acceso discreto del coordinador (solo emoji) */}
+      <div className="landing-bottom">
+        <div className="home-disclaimer">
+          <span className="hd-flag">🇻🇪</span>
+          <p>
+            En estos momentos se requiere toda la <b>organización y responsabilidad</b> posible.
+            Si no puedes atender o ayudar, lo entendemos — pero <b>sé responsable con el uso</b> de
+            esta herramienta: detrás de cada tarea hay personas reales. <b className="hd-strong">Venezuela nos necesita.</b>
+          </p>
+        </div>
+        <button className={`admin-emoji ${isAdmin ? 'granted' : ''}`} onClick={onCoordinator} title="Acceso del coordinador" aria-label="Acceso del coordinador">
+          {isAdmin ? '🧭' : '🔒'}
         </button>
-      </div>
-      <div className="home-disclaimer">
-        <span className="hd-flag">🇻🇪</span>
-        <p>
-          En estos momentos se requiere toda la <b>organización y responsabilidad</b> posible.
-          Si no puedes atender o ayudar, lo entendemos — pero <b>sé responsable con el uso</b> de
-          esta herramienta: detrás de cada tarea hay personas reales. <b className="hd-strong">Venezuela nos necesita.</b>
-        </p>
       </div>
     </section>
   );
@@ -394,33 +401,36 @@ function Registro({ initialMode, onDone }) {
 /* ====================================================================
    USUARIO — perfil unificado con switch Ayudar / Reportar
    ==================================================================== */
-function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, online, volTab, setVolTab, h, onSendReport, userPos, geoState, requestGeo }) {
+function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, online, volView, setVolView, h, onSendReport, userPos, geoState, requestGeo }) {
+  // El contador de "Ayudas" lleva a las tareas completadas.
+  const verCompletadas = () => { setMode('voluntario'); setVolView('completadas'); };
   return (
     <section className="view">
       <div className="panel prof-head">
         <div className="who"><b>{user.name}</b><span>📞 {user.phone} &nbsp;·&nbsp; 🪪 {user.cedula}</span></div>
         <div className="prof-stats">
-          <div className="ps help"><b>{counters.done}</b><span>Ayudas</span></div>
+          <button className="ps help" onClick={verCompletadas} title="Ver tus tareas completadas"><b>{counters.done}</b><span>Ayudas ›</span></button>
           <div className="ps rep"><b>{counters.reports}</b><span>Reportes</span></div>
         </div>
       </div>
 
       <div className="subtabs mode-switch">
-        <button className={mode === 'voluntario' ? 'active' : ''} onClick={() => setMode('voluntario')}>🙋 Ayudar</button>
+        <button className={mode === 'voluntario' ? 'active' : ''} onClick={() => { setMode('voluntario'); setVolView('board'); }}>🙋 Ayudar</button>
         <button className={mode === 'reportante' ? 'active' : ''} onClick={() => setMode('reportante')}>📢 Reportar</button>
       </div>
 
       {mode === 'voluntario'
-        ? <VolunteerArea tasks={tasks} myTasks={myTasks} boardMore={boardMore} loadMore={loadMore} user={user} online={online} volTab={volTab} setVolTab={setVolTab} h={h} userPos={userPos} geoState={geoState} requestGeo={requestGeo} />
+        ? <VolunteerArea tasks={tasks} myTasks={myTasks} boardMore={boardMore} loadMore={loadMore} user={user} online={online} volView={volView} setVolView={setVolView} h={h} userPos={userPos} geoState={geoState} requestGeo={requestGeo} />
         : <ReportArea myReports={myReports} onSend={onSendReport} onSwitch={() => setMode('voluntario')} userPos={userPos} requestGeo={requestGeo} />}
     </section>
   );
 }
 
-function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volTab, setVolTab, h, userPos, geoState, requestGeo }) {
+function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volView, setVolView, h, userPos, geoState, requestGeo }) {
   const [openId, setOpenId] = useState(null);
   const [liveActive, setLiveActive] = useState(null); // tarea en foco en TIEMPO REAL
   const [shown, setShown] = useState(5);              // muestra 5, "cargar más" suma 5
+  const [celebrate, setCelebrate] = useState(false);  // mensaje motivador al completar
 
   // Pide ubicación al entrar al tablero (si no se ha intentado).
   useEffect(() => { if (geoState === 'idle') requestGeo(); }, [geoState, requestGeo]);
@@ -464,50 +474,73 @@ function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volT
     : null;
   const activeCancelled = activeT && (activeT.status === 'cancelada' || activeT.state === 'cancelada');
 
+  // Al completar: muestra el mensaje motivador (en vez de saltar al tablero).
+  const hVol = { ...h, complete: async (id) => { await h.complete(id); setCelebrate(true); } };
+  const verDisponibles = () => { setCelebrate(false); setVolView('board'); };
+
+  // 1) Mensaje motivador tras completar
+  if (celebrate) {
+    return (
+      <div className="panel celebrate">
+        <div className="cel-emoji">🎉</div>
+        <h2>¡Gracias por tu ayuda!</h2>
+        <p>Acabas de completar una tarea y eso marca una diferencia real. Cada acción cuenta y hay gente que hoy está mejor por ti. <b>Venezuela te necesita</b> — ¿seguimos ayudando?</p>
+        <button className="btn btn-take" onClick={verDisponibles}>🙋 Ver tareas disponibles</button>
+      </div>
+    );
+  }
+
+  // 2) Tarea en foco (una a la vez)
+  if (active) {
+    return activeCancelled ? (
+      <div className="focus-note" style={{ background: 'var(--p-alta-bg)', borderColor: '#f6c9d4', color: 'var(--p-alta)' }}>
+        <span>⚠️</span><span>El coordinador canceló esta tarea. Pulsa <b>Actualizar</b> para ver otras.</span>
+      </div>
+    ) : (
+      <>
+        <div className="focus-note"><span>🎯</span><span>Tienes una tarea en curso. Su estado se actualiza en tiempo real. Termínala o déjala para ver otras.</span></div>
+        <div className="task-grid"><MyTaskCard t={activeT} mine={activeMine} online={online} h={hVol} /></div>
+      </>
+    );
+  }
+
+  // 3) Tareas completadas (se llega desde el contador "Ayudas")
+  if (volView === 'completadas') {
+    return (
+      <>
+        <div className="section-head"><span className="kicker">Tu aporte</span><h2 style={{ fontSize: 17 }}>Tareas completadas</h2><div className="rule" />
+          <button className="btn btn-primary btn-sm" onClick={verDisponibles}>🙋 Ver tareas disponibles</button></div>
+        {done.length
+          ? <div className="task-grid">{done.map((o, i) => <MyTaskCard key={o.t.id} t={o.t} mine={o.mine} online={online} h={hVol} i={i} />)}</div>
+          : <Empty title="Aún no has completado tareas" sub="Toma una tarea disponible y aparecerá aquí cuando la termines." />}
+        <div style={{ textAlign: 'center', marginTop: 18 }}>
+          <button className="btn btn-take" onClick={verDisponibles}>🙋 Ver tareas disponibles</button>
+        </div>
+      </>
+    );
+  }
+
+  // 4) Tablero (vista por defecto): siempre las tareas por hacer
   return (
     <>
-      <div className="subtabs vol-tabs">
-        <button className={volTab === 'tablero' ? 'active' : ''} onClick={() => setVolTab('tablero')}>🗂️ Tareas abiertas{!active && <span className="count">{board.length}</span>}</button>
-        <button className={volTab === 'mis' ? 'active' : ''} onClick={() => setVolTab('mis')}>🎒 Mis tareas <span className="count">{active ? 1 : done.length}</span></button>
-      </div>
-
-      {active ? (
-        activeCancelled ? (
-          <div className="focus-note" style={{ background: 'var(--p-alta-bg)', borderColor: '#f6c9d4', color: 'var(--p-alta)' }}>
-            <span>⚠️</span><span>El coordinador canceló esta tarea. Pulsa <b>Actualizar</b> para ver otras.</span>
-          </div>
-        ) : (
-          <>
-            <div className="focus-note"><span>🎯</span><span>Tienes una tarea en curso. Su estado se actualiza en tiempo real. Termínala o déjala para ver otras.</span></div>
-            <div className="task-grid"><MyTaskCard t={activeT} mine={activeMine} online={online} h={h} /></div>
-          </>
-        )
-      ) : volTab === 'tablero' ? (
-        <>
-          {!userPos && (
-            <div style={{ marginBottom: 14 }}>
-              <button className="btn btn-ghost btn-sm" onClick={requestGeo}>{geoState === 'asking' ? '📍 Ubicando…' : '📍 Usar mi ubicación para ver distancias'}</button>
-            </div>
-          )}
-          {board.length
-            ? <div className="task-grid">{board.slice(0, shown).map((o, i) => (
-                <TaskCard key={o.t.id} t={o.t} mode="vol" i={i} h={h} distanceLabel={o.km != null ? fmtKm(o.km) : null} onOpen={() => setOpenId(o.t.id)} />
-              ))}</div>
-            : <Empty title="Todo cubierto" sub="No hay tareas abiertas ahora mismo. Te avisaremos cuando surja una cerca de ti." />}
-          {board.length > 0 && (shown < board.length || boardMore) && (
-            <div style={{ textAlign: 'center', marginTop: 16 }}>
-              <button className="btn btn-ghost btn-sm" onClick={() => { setShown((s) => s + 5); if (shown + 5 >= board.length && boardMore) loadMore(); }}>
-                Cargar más tareas
-              </button>
-            </div>
-          )}
-          {openTask && <TaskDetail t={openTask.t} mode="vol" distanceLabel={openTask.km != null ? fmtKm(openTask.km) : null} h={h} onClose={() => setOpenId(null)} />}
-        </>
-      ) : (
-        done.length
-          ? <div className="task-grid">{done.map((o, i) => <MyTaskCard key={o.t.id} t={o.t} mine={o.mine} online={online} h={h} i={i} />)}</div>
-          : <Empty title="Aún no has completado tareas" sub="Toma una tarea en “Tareas abiertas”. Aparecerá aquí con su estatus." />
+      {!userPos && (
+        <div style={{ marginBottom: 14 }}>
+          <button className="btn btn-ghost btn-sm" onClick={requestGeo}>{geoState === 'asking' ? '📍 Ubicando…' : '📍 Usar mi ubicación para ver distancias'}</button>
+        </div>
       )}
+      {board.length
+        ? <div className="task-grid">{board.slice(0, shown).map((o, i) => (
+            <TaskCard key={o.t.id} t={o.t} mode="vol" i={i} h={hVol} distanceLabel={o.km != null ? fmtKm(o.km) : null} onOpen={() => setOpenId(o.t.id)} />
+          ))}</div>
+        : <Empty title="Todo cubierto" sub="No hay tareas abiertas ahora mismo. Te avisaremos cuando surja una cerca de ti." />}
+      {board.length > 0 && (shown < board.length || boardMore) && (
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => { setShown((s) => s + 5); if (shown + 5 >= board.length && boardMore) loadMore(); }}>
+            Cargar más tareas
+          </button>
+        </div>
+      )}
+      {openTask && <TaskDetail t={openTask.t} mode="vol" distanceLabel={openTask.km != null ? fmtKm(openTask.km) : null} h={hVol} onClose={() => setOpenId(null)} />}
     </>
   );
 }
