@@ -1,0 +1,23 @@
+{
+  "name": "tablero-respuesta-ve",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tablero vivo de coordinación de tareas para la respuesta a desastres en Venezuela.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "seed": "node scripts/seed.mjs"
+  },
+  "dependencies": {
+    "firebase": "^10.13.2",
+    "next": "14.2.15",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "eslint": "^8",
+    "eslint-config-next": "14.2.15"
+  }
+}

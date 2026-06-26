@@ -1,0 +1,18 @@
+{
+  "name": "Tablero de Respuesta · VE",
+  "short_name": "Respuesta VE",
+  "description": "Tablero vivo de coordinación de tareas para la respuesta a desastres en Venezuela. La organización coordina; la gente toma tareas.",
+  "lang": "es",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#05070d",
+  "theme_color": "#05070d",
+  "categories": ["utilities", "productivity", "social"],
+  "icons": [
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

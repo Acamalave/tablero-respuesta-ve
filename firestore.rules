@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ─────────────────────────────────────────────────────────────
+    // Tablero de Respuesta VE — MODO DEMO (plan gratuito Spark)
+    // Acceso abierto para que el prototipo funcione en vivo sin
+    // provisionar Firebase Auth (Identity Platform requiere billing).
+    //
+    // PRODUCCIÓN: cambiar a verificación por teléfono (SMS) y
+    //   allow read: if true;
+    //   allow write: if request.auth != null;   // + reglas por rol
+    // ─────────────────────────────────────────────────────────────
+    match /tasks/{id}      { allow read, write: if true; }
+    match /reports/{id}    { allow read, write: if true; }
+    match /volunteers/{id} { allow read, write: if true; }
+  }
+}
