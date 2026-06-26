@@ -52,8 +52,7 @@ export default function Page() {
   const [myReports, setMyReports] = useState([]);  // reportes del usuario
   const [volunteers, setVolunteers] = useState([]);
   const [suggestions, setSuggestions] = useState([]); // sugerencias (coordinador)
-  const [visits, setVisits] = useState([]);           // historial de visitas (coordinador)
-  const [visitsCount, setVisitsCount] = useState(0);  // total personas únicas
+  const [visitsCount, setVisitsCount] = useState(0);  // KPI: personas únicas que ingresaron
   const [suggestModal, setSuggestModal] = useState(false); // usuario: enviar sugerencia
   const [detailVol, setDetailVol] = useState(null);   // coordinador: perfil en vista previa
   const [stats, setStats] = useState({ abiertas: 0, encurso: 0, completadas: 0, pend: 0 });
@@ -125,12 +124,11 @@ export default function Page() {
     setRefreshing(true);
     try {
       if (role === 'coordinador') {
-        const [board, st] = await Promise.all([store.fetchBoard(), store.fetchStats()]);
-        setTasks(board.rows); setBoardLast(board.last); setBoardMore(board.more); setStats(st);
+        const [board, st, vc] = await Promise.all([store.fetchBoard(), store.fetchStats(), store.fetchVisitsCount()]);
+        setTasks(board.rows); setBoardLast(board.last); setBoardMore(board.more); setStats(st); setVisitsCount(vc);
         if (coordTab === 'reportes') setReports(await store.fetchPendingReports());
-        else if (coordTab === 'voluntarios') { setVolunteers(await store.fetchVolunteers()); setVisitsCount(await store.fetchVisitsCount()); }
+        else if (coordTab === 'voluntarios') setVolunteers(await store.fetchVolunteers());
         else if (coordTab === 'sugerencias') setSuggestions(await store.fetchSuggestions());
-        else if (coordTab === 'visitas') { setVisits(await store.fetchVisits()); setVisitsCount(await store.fetchVisitsCount()); }
       } else if (role === 'usuario' && uid) {
         const meDoc = await store.fetchUser(uid); if (meDoc) setMe(meDoc);
         if (mode === 'voluntario') {
@@ -272,7 +270,7 @@ export default function Page() {
             onCoordinator={() => { if (isAdmin) { setRole('coordinador'); setCoordTab('tablero'); } else setAdminGate(true); }}
           />
         ) : role === 'coordinador' ? (
-          <Coordinador {...{ tasks, reports, volunteers, suggestions, visits, visitsCount, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, onEditCoord: () => setEditCoord(true), onOpenVol: setDetailVol, onSuggestStatus: async (id, st) => { await store.setSuggestionStatus(id, st); setSuggestions((s) => s.map((x) => (x.id === id ? { ...x, status: st } : x))); }, openCreate: (p) => setModal({ prefill: p || null }), onConvert: (r) => setModal({ prefill: r }), onDiscard: async (id) => { await store.setReportStatus(id, 'descartado'); refresh(); } }} />
+          <Coordinador {...{ tasks, reports, volunteers, suggestions, visitsCount, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, onEditCoord: () => setEditCoord(true), onOpenVol: setDetailVol, onSuggestStatus: async (id, st) => { await store.setSuggestionStatus(id, st); setSuggestions((s) => s.map((x) => (x.id === id ? { ...x, status: st } : x))); }, openCreate: (p) => setModal({ prefill: p || null }), onConvert: (r) => setModal({ prefill: r }), onDiscard: async (id) => { await store.setReportStatus(id, 'descartado'); refresh(); } }} />
         ) : user ? (
           <Usuario {...{ user: { ...user, uid }, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, uid, online, volView, setVolView, h, coord, onEditProfile: () => setEditProfile(true), onSuggest: () => setSuggestModal(true), onSendReport: sendReport, userPos, geoState, requestGeo }} />
         ) : (
@@ -961,7 +959,7 @@ function ReportArea({ myReports, onSend, onSwitch, userPos, requestGeo }) {
 /* ====================================================================
    COORDINADOR
    ==================================================================== */
-function Coordinador({ tasks, reports, volunteers, suggestions, visits, visitsCount, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, onEditCoord, onOpenVol, onSuggestStatus, openCreate, onConvert, onDiscard }) {
+function Coordinador({ tasks, reports, volunteers, suggestions, visitsCount, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, onEditCoord, onOpenVol, onSuggestStatus, openCreate, onConvert, onDiscard }) {
   const newSugg = suggestions.filter((s) => s.status === 'nueva').length;
   return (
     <section className="view">
@@ -971,14 +969,15 @@ function Coordinador({ tasks, reports, volunteers, suggestions, visits, visitsCo
         <button className="btn btn-primary btn-sm" onClick={() => openCreate()}>➕ Crear tarea</button>
       </div>
       <div className="coord-contact-line">📞 Contacto que ven los voluntarios: <b>{coord?.name}</b> · {coord?.phone}</div>
-      <div className="stats">
+      <div className="stats stats-5">
+        <Stat n={visitsCount} l="Personas únicas" a="var(--ve-blue)" />
         <Stat n={stats.abiertas} l="Abiertas" a="var(--p-baja)" />
         <Stat n={stats.encurso} l="En curso" a="var(--p-media)" />
         <Stat n={stats.completadas} l="Completadas" a="var(--ink-faint)" />
         <Stat n={stats.pend} l="Por revisar" a="var(--ve-red)" />
       </div>
       <div className="subtabs">
-        {[['tablero', '🗂️ Tablero'], ['voluntarios', '👥 Personas'], ['visitas', '👁️ Visitas'], ['reportes', '📥 Reportes'], ['sugerencias', '💡 Sugerencias'], ['mapa', '🗺️ Mapa']].map(([k, lbl]) => (
+        {[['tablero', '🗂️ Tablero'], ['voluntarios', '👥 Personas'], ['reportes', '📥 Reportes'], ['sugerencias', '💡 Sugerencias'], ['mapa', '🗺️ Mapa']].map(([k, lbl]) => (
           <button key={k} className={coordTab === k ? 'active' : ''} onClick={() => setCoordTab(k)}>
             {lbl}
             {k === 'reportes' && stats.pend > 0 && <span className="count">{stats.pend}</span>}
@@ -987,8 +986,7 @@ function Coordinador({ tasks, reports, volunteers, suggestions, visits, visitsCo
         ))}
       </div>
       {coordTab === 'tablero' && <CoordBoard tasks={tasks} h={h} boardMore={boardMore} loadMore={loadMore} />}
-      {coordTab === 'voluntarios' && <Roster volunteers={volunteers} visitsCount={visitsCount} onOpen={onOpenVol} />}
-      {coordTab === 'visitas' && <VisitsLog visits={visits} count={visitsCount} volunteers={volunteers} onOpen={onOpenVol} />}
+      {coordTab === 'voluntarios' && <Roster volunteers={volunteers} onOpen={onOpenVol} />}
       {coordTab === 'mapa' && <TacticalMap tasks={tasks} />}
       {coordTab === 'reportes' && <Inbox reports={reports} onConvert={onConvert} onDiscard={onDiscard} />}
       {coordTab === 'sugerencias' && <SuggestionsList suggestions={suggestions} onStatus={onSuggestStatus} />}
@@ -1026,10 +1024,10 @@ function CoordBoard({ tasks, h, boardMore, loadMore }) {
   );
 }
 
-function Roster({ volunteers, visitsCount, onOpen }) {
+function Roster({ volunteers, onOpen }) {
   return (
     <div>
-      <div className="roster-head">👥 <b>{volunteers.length}</b> registradas · 👁️ <b>{visitsCount}</b> han ingresado a la página. Toca a una persona para ver su perfil y editarlo.</div>
+      <div className="roster-head">👥 <b>{volunteers.length}</b> personas registradas. Toca a una para ver su perfil y editarlo.</div>
       {!volunteers.length
         ? <Empty title="Sin personas aún" sub="Aparecerán al registrarse." />
         : <div className="roster">
@@ -1044,33 +1042,6 @@ function Roster({ volunteers, visitsCount, onOpen }) {
                 <div className="vct"><b>{v.done ?? 0}</b><span>ayudas</span></div>
               </button>
             ))}
-          </div>}
-    </div>
-  );
-}
-
-// Historial de personas únicas que han ingresado a la página.
-function VisitsLog({ visits, count, volunteers, onOpen }) {
-  const byUid = Object.fromEntries(volunteers.map((v) => [v.id, v]));
-  return (
-    <div>
-      <div className="roster-head">👁️ <b>{count}</b> personas únicas han ingresado a la página.</div>
-      {!visits.length
-        ? <Empty title="Aún sin visitas registradas" sub="Cada persona que entre aparecerá aquí una sola vez." />
-        : <div className="visits">
-            {visits.map((vi) => {
-              const reg = byUid[vi.id];
-              return (
-                <div className={`visit-row ${reg ? 'reg' : ''}`} key={vi.id} onClick={reg ? () => onOpen({ ...reg, uid: reg.id }) : undefined} role={reg ? 'button' : undefined}>
-                  <span className="vdot" />
-                  <div className="vmain">
-                    <b>{reg ? reg.name : 'Visitante'}</b>
-                    <span>{reg ? `Registrado · ${reg.done ?? 0} ayudas` : 'No registrado'}{reg && <span className="arr"> ›</span>}</span>
-                  </div>
-                  <span className="vtime">{ago(vi.firstSeen)}</span>
-                </div>
-              );
-            })}
           </div>}
     </div>
   );
