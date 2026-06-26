@@ -292,16 +292,16 @@ function Registro({ initialMode, onDone }) {
       </div>
       <div className="panel" style={{ padding: 22, marginTop: 16 }}>
         <div className="field">
-          <label>Nombre y apellido <span className="req">obligatorio</span></label>
+          <label>Nombre y apellido</label>
           <input className={`input ${touched && !nameOk ? 'invalid' : ''}`} value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Carlos Rodríguez" />
         </div>
         <div className="g2">
           <div className="field">
-            <label>Teléfono <span className="req">obligatorio</span></label>
+            <label>Teléfono</label>
             <input className={`input ${touched && !phoneOk ? 'invalid' : ''}`} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+58 412 1234567" inputMode="tel" />
           </div>
           <div className="field">
-            <label>Cédula <span className="req">obligatorio</span></label>
+            <label>Cédula</label>
             <input className={`input ${touched && !cedulaOk ? 'invalid' : ''}`} value={cedula} onChange={(e) => setCedula(e.target.value)} placeholder="V-12345678" inputMode="numeric" />
           </div>
         </div>
@@ -454,7 +454,7 @@ function ReportArea({ reports, uid, onSend, onSwitch, userPos, requestGeo }) {
   return (
     <>
       <div className="panel" style={{ padding: 22 }}>
-        <div className="field"><label>¿Qué hace falta? <span className="req">obligatorio</span></label><input className="input" value={need} onChange={(e) => setNeed(e.target.value)} placeholder="Ej. Falta agua potable en un refugio" /></div>
+        <div className="field"><label>¿Qué hace falta?</label><input className="input" value={need} onChange={(e) => setNeed(e.target.value)} placeholder="Ej. Falta agua potable en un refugio" /></div>
         <div className="field"><label>¿Dónde? <span className="hint">dirección o referencia</span></label><input className="input" value={loc} onChange={(e) => setLoc(e.target.value)} placeholder="Ej. Sector La Pastora, Caracas" /></div>
         <div className="field">
           <label>Ubicación en el mapa <span className="hint">toca tu zona</span></label>
