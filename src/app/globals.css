@@ -650,6 +650,10 @@ textarea.input { resize: vertical; min-height: 84px; }
   .vol-head .aporte { margin-left: 0; }
   .prof-stats { margin-left: 0; width: 100%; }
   .prof-stats .ps { flex: 1; }
+  /* En móvil la tarjeta hace wrap: fija el lápiz arriba a la derecha, alineado al nombre. */
+  .prof-head { position: relative; }
+  .prof-head .who { width: 100%; padding-right: 48px; }
+  .prof-edit-ic { position: absolute; top: 14px; right: 16px; margin: 0; }
   .toasts { left: 14px; right: 14px; max-width: none; }
   .stepper .stp { width: 64px; }
   .stepper .stp .lab { font-size: 10.5px; }
