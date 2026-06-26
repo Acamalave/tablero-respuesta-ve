@@ -79,9 +79,9 @@ service cloud.firestore {
 
     // ───────────────────────── volunteers ─────────────────────────
     function validVol(d) {
-      return d.keys().hasOnly(['name','zone','skills','phone','cedula','done','reports'])
+      return d.keys().hasOnly(['name','zone','skills','phone','cedula','cedulaNorm','done','reports'])
         && str(d.name, 120) && d.name.size() >= 1
-        && ostr(d,'zone',40) && ostr(d,'phone',40) && ostr(d,'cedula',40)
+        && ostr(d,'zone',40) && ostr(d,'phone',40) && ostr(d,'cedula',40) && ostr(d,'cedulaNorm',40)
         && olist(d,'skills',40)
         && (!('done'    in d) || (d.done is int    && d.done    >= 0 && d.done    <= 100000))
         && (!('reports' in d) || (d.reports is int && d.reports >= 0 && d.reports <= 100000));
@@ -90,7 +90,7 @@ service cloud.firestore {
       allow read:   if true;
       allow create: if validVol(request.resource.data);
       allow update: if validVol(request.resource.data)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','zone','skills','phone','cedula','done','reports'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','zone','skills','phone','cedula','cedulaNorm','done','reports'])
         && counterOk('done') && counterOk('reports');
       allow delete: if false;
     }

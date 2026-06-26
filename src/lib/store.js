@@ -34,6 +34,21 @@ export function clientUid() {
   if (!u) { u = 'u-' + Math.random().toString(36).slice(2, 12); localStorage.setItem(UID_KEY, u); }
   return u;
 }
+// Adopta un uid existente (recuperar perfil por cédula en otro dispositivo).
+export function setClientUid(u) {
+  try { if (typeof window !== 'undefined' && u) localStorage.setItem(UID_KEY, u); } catch {}
+}
+// Cédula normalizada (solo dígitos) — clave para evitar perfiles repetidos.
+export const normCedula = (c) => (c || '').replace(/\D/g, '');
+// Busca un perfil existente por cédula. Devuelve el perfil o null.
+export async function findByCedula(cedula) {
+  const n = normCedula(cedula);
+  if (n.length < 6) return null;
+  try {
+    const snap = await getDocs(query(VOLS, where('cedulaNorm', '==', n), limit(1)));
+    return snap.empty ? null : row(snap.docs[0]);
+  } catch { return null; }
+}
 export function tryAnonAuth() {
   try { signInAnonymously(auth).catch(() => {}); } catch {}
 }
@@ -244,7 +259,7 @@ export const cancelTask = (taskId) =>
 
 /* ----- Perfil unificado ----- */
 export async function upsertVolunteer(v) {
-  const data = { name: v.name, zone: v.zone || null, skills: v.skills || [], phone: v.phone || '', cedula: v.cedula || '' };
+  const data = { name: v.name, zone: v.zone || null, skills: v.skills || [], phone: v.phone || '', cedula: v.cedula || '', cedulaNorm: normCedula(v.cedula) };
   if (typeof v.done === 'number') data.done = v.done;
   if (typeof v.reports === 'number') data.reports = v.reports;
   await setDoc(doc(VOLS, v.uid), data, { merge: true });

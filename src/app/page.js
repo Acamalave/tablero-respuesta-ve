@@ -194,6 +194,19 @@ export default function Page() {
   };
 
   const register = async (profile) => {
+    // Anti-duplicados: si ya existe un perfil con esa cédula, lo recuperamos.
+    const existing = await store.findByCedula(profile.cedula);
+    if (existing && existing.id !== uid) {
+      const ruid = existing.id;
+      store.setClientUid(ruid); setUid(ruid);
+      const full = { ...profile, uid: ruid };
+      try { localStorage.setItem(USER_KEY, JSON.stringify(full)); } catch {}
+      setUser(full);
+      await store.upsertVolunteer(full);   // actualiza el perfil existente (no duplica)
+      await refresh();
+      pushToast('Recuperamos tu perfil', 'Ya existía un perfil con esa cédula; lo actualizamos en lugar de crear uno repetido.', '✅', 'Listo');
+      return;
+    }
     try { localStorage.setItem(USER_KEY, JSON.stringify(profile)); } catch {}
     const full = { ...profile, uid };
     setUser(full);
