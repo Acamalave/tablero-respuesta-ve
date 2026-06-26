@@ -114,6 +114,11 @@ export async function fetchUser(uid) {
   return s.exists() ? row(s) : null;
 }
 
+// Conteo REAL de voluntarios registrados (agregación count → ~1 lectura).
+export async function fetchHelpersCount() {
+  try { return (await getCountFromServer(VOLS)).data().count; } catch { return 0; }
+}
+
 // Contacto del coordinador (editable) — mostrado a los voluntarios.
 export async function fetchCoordContact() {
   try { const s = await getDoc(COORD_DOC); return s.exists() ? s.data() : null; } catch { return null; }

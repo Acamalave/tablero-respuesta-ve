@@ -24,6 +24,12 @@ const VIEW_KEY = 'tablero_view_v1';   // 'usuario' | 'coordinador' (última pant
 // Código de acceso del coordinador (solo la organización). Cámbialo aquí.
 const ADMIN_CODE = 'acacio';
 
+// Semilla de demo SOLO en desarrollo (localhost). En producción la app
+// nunca crea tareas/voluntarios ficticios — arranca con datos reales.
+const SEED_ENABLED =
+  typeof window !== 'undefined' &&
+  /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(window.location.hostname);
+
 // Dos tarjetas de entrada; ambas usan el MISMO perfil unificado.
 const ROLES = [
   { key: 'voluntario', icon: '🙋', title: 'Voluntario', desc: 'Veo tareas abiertas cerca de mí y tomo la que puedo hacer.', rc: '#E0A800', rcbg: '#fef6da', go: 'Quiero ayudar' },
@@ -50,7 +56,7 @@ export default function Page() {
   const [online] = useState(true);
   const [coordTab, setCoordTab] = useState('tablero');
   const [volView, setVolView] = useState('board');  // 'board' | 'completadas'
-  const [visitors, setVisitors] = useState(1000); // valor estable para SSR; se aleatoriza en cliente
+  const [helpers, setHelpers] = useState(0); // conteo REAL de voluntarios registrados
   const [user, setUser] = useState(null);
   const [coord, setCoord] = useState({ name: COORD_NAME, phone: COORD_PHONE }); // contacto del coordinador (editable)
   const [editProfile, setEditProfile] = useState(false);
@@ -75,8 +81,9 @@ export default function Page() {
       store.tryAnonAuth();
       const myUid = store.clientUid();
       setUid(myUid);
-      try { await store.seedIfEmpty(); } catch {}
+      if (SEED_ENABLED) { try { await store.seedIfEmpty(); } catch {} }
       try { const c = await store.fetchCoordContact(); if (c && c.phone) setCoord(c); } catch {}
+      try { const n = await store.fetchHelpersCount(); setHelpers(n); } catch {}
       try {
         const saved = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
         const admin = localStorage.getItem(ADMIN_KEY) === '1';
@@ -100,15 +107,6 @@ export default function Page() {
   useEffect(() => {
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [role, mode, volView, coordTab, user, ready]);
-
-  // Contador de "personas ayudando" — simulado, se mueve de a poco entre 900 y 1200.
-  useEffect(() => {
-    setVisitors(900 + Math.floor(Math.random() * 301)); // aleatorio inicial SOLO en cliente
-    const id = setInterval(() => {
-      setVisitors((v) => Math.max(900, Math.min(1200, v + (Math.floor(Math.random() * 7) - 3))));
-    }, 4500);
-    return () => clearInterval(id);
-  }, []);
 
   const counters = { done: me.done || 0, reports: me.reports || 0 };
 
@@ -229,10 +227,12 @@ export default function Page() {
           <span className="pin" style={{ display: 'inline-block', animation: refreshing ? 'spin .8s linear infinite' : 'none' }}>↻</span>
           <span className="rb-text">{refreshing ? 'Actualizando' : 'Actualizar'}</span>
         </button>}
-        <div className="netchip live" title="Personas ayudando ahora">
-          <span className="dot" />
-          <span>{visitors.toLocaleString('es-VE')} ayudando</span>
-        </div>
+        {helpers > 0 && (
+          <div className="netchip live" title="Voluntarios registrados para ayudar">
+            <span className="dot" />
+            <span>{helpers.toLocaleString('es-VE')} {helpers === 1 ? 'voluntario' : 'voluntarios'}</span>
+          </div>
+        )}
       </header>
 
       <main>
@@ -514,6 +514,9 @@ function Registro({ initialMode, onDone }) {
           {valid ? 'Crear perfil y entrar →' : 'Completa nombre, teléfono y cédula'}
         </button>
         <div className="demo-note">Tus datos dan formalidad al reporte y permiten que la organización confirme contigo.</div>
+        <p className="privacy-note">
+          🔒 <b>Privacidad:</b> tu nombre, teléfono y cédula se usan <b>solo</b> para coordinar la ayuda y que el equipo de respuesta pueda contactarte. No se publican ni se comparten con terceros ajenos a la coordinación. Al continuar, aceptas este uso.
+        </p>
       </div>
     </section>
   );
