@@ -12,7 +12,7 @@
   "theme_color": "#eef2f8",
   "categories": ["utilities", "productivity", "social"],
   "icons": [
-    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+    { "src": "/icons/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

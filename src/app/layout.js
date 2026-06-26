@@ -10,7 +10,7 @@ export const metadata = {
   manifest: '/manifest.webmanifest',
   applicationName: 'Tarea: Venezuela',
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Tarea: Venezuela' },
-  icons: { icon: '/icons/icon.svg', apple: '/icons/icon.svg' },
+  icons: { icon: '/icons/icon.png', apple: '/icons/icon.png' },
   formatDetection: { telephone: false },
   // Vista previa al compartir (WhatsApp, redes).
   openGraph: {

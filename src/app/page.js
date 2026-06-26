@@ -5,7 +5,6 @@
    como voluntario y/o REPORTAR. El perfil es el mismo y cuenta ambas.
    ===================================================================== */
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import Logo from './components/Logo';
 import TaskCard from './components/TaskCard';
 import TaskDetail from './components/TaskDetail';
 import MyTaskCard from './components/MyTaskCard';
@@ -219,7 +218,7 @@ export default function Page() {
     <div className="app">
       <header className="topbar">
         <div className="brand" onClick={() => setRole(null)} title="Volver al inicio">
-          <span className="flag"><Logo size={40} /></span>
+          <span className="flag"><img src="/logo.jpg" alt="Tarea: Venezuela" width="40" height="40" /></span>
           <div className="brand-txt">
             <h1>TAREA: <b>VENEZUELA</b></h1>
             <span>Coordinación de tareas</span>
@@ -388,6 +387,41 @@ function AdminGate({ onClose, onOk }) {
   );
 }
 
+// Selector de habilidades: opciones del catálogo + las que el usuario AGREGUE.
+function SkillsPicker({ skills, setSkills }) {
+  const [custom, setCustom] = useState('');
+  const toggle = (k) => setSkills((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
+  const customSkills = (skills || []).filter((s) => !SKILLS[s]); // las propias (no del catálogo)
+  const addCustom = () => {
+    const v = custom.trim().slice(0, 40);
+    if (!v) return;
+    const dup = (skills || []).some((s) => s.toLowerCase() === v.toLowerCase()) ||
+      Object.values(SKILLS).some((x) => x.label.toLowerCase() === v.toLowerCase());
+    if (!dup) setSkills((s) => [...(s || []), v]);
+    setCustom('');
+  };
+  return (
+    <>
+      <div className="chips-note">Toca las que apliquen — y si falta alguna, <b>agrégala tú</b>.</div>
+      <div className="chips two">
+        {Object.entries(SKILLS).map(([k, s]) => (
+          <div key={k} className={`chip ${skills.includes(k) ? 'on' : ''}`} onClick={() => toggle(k)}><span>{s.icon}</span>{s.label}</div>
+        ))}
+        {customSkills.map((s) => (
+          <div key={s} className="chip on" onClick={() => toggle(s)} title="Quitar"><span>✨</span>{s}<b className="chip-x">×</b></div>
+        ))}
+      </div>
+      <div className="skill-add">
+        <input className="input" value={custom} maxLength={40} inputMode="text"
+          placeholder="¿Otra cosa que puedes ofrecer? Escríbela…"
+          onChange={(e) => setCustom(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustom(); } }} />
+        <button type="button" className="btn btn-ghost btn-sm" onClick={addCustom} disabled={!custom.trim()}>+ Agregar</button>
+      </div>
+    </>
+  );
+}
+
 /* ====================================================================
    EDITAR PERFIL — el usuario cambia su contacto y lo que ofrece
    ==================================================================== */
@@ -403,7 +437,6 @@ function EditProfileModal({ user, onClose, onSave }) {
   const phoneOk = phone.replace(/\D/g, '').length >= 7;
   const cedulaOk = cedula.replace(/\D/g, '').length >= 6;
   const valid = nameOk && phoneOk && cedulaOk;
-  const toggle = (k) => setSkills((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
   const submit = () => {
     if (!valid) { setTouched(true); return; }
     onSave({ name: name.trim(), phone: phone.trim(), cedula: cedula.trim(), skills, zone });
@@ -430,10 +463,7 @@ function EditProfileModal({ user, onClose, onSave }) {
         </div>
         <div className="field">
           <label>¿Qué puedes hacer?</label>
-          <div className="chips-note">Puedes seleccionar <b>varias opciones</b> — toca todas las que apliquen.</div>
-          <div className="chips two">{Object.entries(SKILLS).map(([k, s]) => (
-            <div key={k} className={`chip ${skills.includes(k) ? 'on' : ''}`} onClick={() => toggle(k)}><span>{s.icon}</span>{s.label}</div>
-          ))}</div>
+          <SkillsPicker skills={skills} setSkills={setSkills} />
         </div>
         <div className="field">
           <label>Tu zona</label>
@@ -498,7 +528,6 @@ function Registro({ initialMode, onDone }) {
   const phoneOk = phone.replace(/\D/g, '').length >= 7;
   const cedulaOk = cedula.replace(/\D/g, '').length >= 6;
   const valid = nameOk && phoneOk && cedulaOk;
-  const toggle = (k) => setSkills((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
 
   return (
     <section className="view onboard">
@@ -525,10 +554,7 @@ function Registro({ initialMode, onDone }) {
         </div>
         <div className="field">
           <label>¿Qué puedes hacer? <span className="hint">opcional</span></label>
-          <div className="chips-note">Puedes seleccionar <b>varias opciones</b> — toca todas las que apliquen.</div>
-          <div className="chips two">{Object.entries(SKILLS).map(([k, s]) => (
-            <div key={k} className={`chip ${skills.includes(k) ? 'on' : ''}`} onClick={() => toggle(k)}><span>{s.icon}</span>{s.label}</div>
-          ))}</div>
+          <SkillsPicker skills={skills} setSkills={setSkills} />
         </div>
         <div className="field">
           <label>Tu zona <span className="hint">opcional</span></label>
@@ -895,7 +921,7 @@ function Roster({ volunteers }) {
           <div>
             <div className="vn">{v.name}</div>
             <div className="vt">📍 {ZONES[v.zone]?.name || '—'}{v.cedula ? ` · 🪪 ${v.cedula}` : ''}</div>
-            <div className="vsk">{(v.skills || []).map((s) => <i key={s} title={SKILLS[s]?.label}>{SKILLS[s]?.icon}</i>)}</div>
+            <div className="vsk">{(v.skills || []).map((s) => <i key={s} title={SKILLS[s]?.label || s}>{SKILLS[s]?.icon || '✨'}</i>)}</div>
           </div>
           <div className="vct"><b>{v.done ?? 0}</b><span>ayudas</span></div>
         </div>
