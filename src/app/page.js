@@ -253,7 +253,8 @@ export default function Page() {
           <span className="pin" style={{ display: 'inline-block', animation: refreshing ? 'spin .8s linear infinite' : 'none' }}>↻</span>
           <span className="rb-text">{refreshing ? 'Actualizando' : 'Actualizar'}</span>
         </button>}
-        {helpers > 0 && (
+        {/* Contador de voluntarios oculto por ahora (cambiar `false` por `helpers > 0` para reactivar) */}
+        {false && helpers > 0 && (
           <div className="netchip live" title="Voluntarios registrados para ayudar">
             <span className="dot" />
             <span>{helpers.toLocaleString('es-VE')} {helpers === 1 ? 'voluntario' : 'voluntarios'}</span>
