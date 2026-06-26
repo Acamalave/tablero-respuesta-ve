@@ -19,7 +19,7 @@ const ADMIN_KEY = 'tablero_admin_v1';
 // Código de acceso del coordinador (solo la organización). Cámbialo aquí.
 // Nota: es una compuerta de demo del lado del cliente; en producción usar
 // Firebase Auth con custom claims por rol.
-const ADMIN_CODE = 'caritas2026';
+const ADMIN_CODE = 'acacio';
 
 // Solo dos roles públicos: el coordinador es acceso de administrador.
 const ROLES = [
