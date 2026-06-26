@@ -20,6 +20,7 @@ import {
 const TASKS = collection(db, 'tasks');
 const REPORTS = collection(db, 'reports');
 const VOLS = collection(db, 'volunteers');
+const COORD_DOC = doc(db, 'config', 'coordinator');
 
 export const PAGE = 20; // tamaño de página del tablero
 
@@ -111,6 +112,14 @@ export async function fetchUser(uid) {
   if (!uid) return null;
   const s = await getDoc(doc(VOLS, uid));
   return s.exists() ? row(s) : null;
+}
+
+// Contacto del coordinador (editable) — mostrado a los voluntarios.
+export async function fetchCoordContact() {
+  try { const s = await getDoc(COORD_DOC); return s.exists() ? s.data() : null; } catch { return null; }
+}
+export async function saveCoordContact(c) {
+  await setDoc(COORD_DOC, { name: c.name || '', phone: c.phone || '' }, { merge: true });
 }
 
 // Resumen del coordinador con agregación count() (regla #5): ~1 lectura/conteo.

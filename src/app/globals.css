@@ -369,6 +369,17 @@ textarea.input { resize: vertical; min-height: 84px; }
 .prof-stats button.ps { font: inherit; color: inherit; cursor: pointer; transition: border-color .2s var(--ease), background .2s var(--ease); }
 .prof-stats button.ps:hover { border-color: var(--ve-blue); background: #eaf1fd; }
 
+/* Botón "Editar mis datos" del perfil */
+.prof-edit { align-self: flex-start; margin-top: 8px; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--ve-blue); background: #eaf1fd; border: 0; border-radius: 999px; padding: 6px 13px; cursor: pointer; transition: background .2s var(--ease); }
+.prof-edit:hover { background: #d9e6fb; }
+
+/* Línea de contacto del coordinador en su panel */
+.coord-contact-line { margin: -6px 0 16px; font-size: 12.5px; color: var(--ink-faint); }
+.coord-contact-line b { color: var(--ink-soft); }
+
+/* Modal con scroll para formularios largos (editar perfil) */
+.modal.modal-scroll { max-height: 88vh; overflow-y: auto; }
+
 /* Mensaje motivador al completar una tarea */
 .celebrate { text-align: center; padding: 40px 26px 30px; max-width: 470px; margin: 16px auto 0; }
 .celebrate .cel-emoji { font-size: 52px; line-height: 1; }
@@ -378,6 +389,7 @@ textarea.input { resize: vertical; min-height: 84px; }
 
 /* Perfil sin avatar — solo los datos */
 .prof-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 16px 18px; margin-bottom: 14px; }
+.prof-head .who { display: flex; flex-direction: column; align-items: flex-start; flex: 1; min-width: 200px; }
 .prof-head .who b { font-family: var(--font-display); font-weight: 800; font-size: 19px; }
 .prof-head .who span { display: block; font-size: 13.5px; color: var(--ink-faint); margin-top: 5px; }
 

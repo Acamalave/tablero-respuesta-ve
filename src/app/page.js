@@ -13,7 +13,7 @@ import TacticalMap from './components/TacticalMap';
 import RealMapPicker from './components/RealMapPicker';
 import {
   ZONES, ZONE_KEYS, SKILLS, PRIOS, PRIO_ORDER,
-  dist, kmTo, fmtKm, taskState, avatarFor, prioBg, ago,
+  dist, kmTo, fmtKm, taskState, avatarFor, prioBg, ago, COORD_NAME, COORD_PHONE,
 } from '@/lib/model';
 import * as store from '@/lib/store';
 
@@ -52,6 +52,9 @@ export default function Page() {
   const [volView, setVolView] = useState('board');  // 'board' | 'completadas'
   const [visitors, setVisitors] = useState(1000); // valor estable para SSR; se aleatoriza en cliente
   const [user, setUser] = useState(null);
+  const [coord, setCoord] = useState({ name: COORD_NAME, phone: COORD_PHONE }); // contacto del coordinador (editable)
+  const [editProfile, setEditProfile] = useState(false);
+  const [editCoord, setEditCoord] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminGate, setAdminGate] = useState(false);
   const [toasts, setToasts] = useState([]);
@@ -73,6 +76,7 @@ export default function Page() {
       const myUid = store.clientUid();
       setUid(myUid);
       try { await store.seedIfEmpty(); } catch {}
+      try { const c = await store.fetchCoordContact(); if (c && c.phone) setCoord(c); } catch {}
       try {
         const saved = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
         const admin = localStorage.getItem(ADMIN_KEY) === '1';
@@ -191,6 +195,25 @@ export default function Page() {
     pushToast('¡Perfil creado!', 'Ya puedes ayudar y reportar con el mismo perfil.', '🙌', 'Bienvenido');
   };
 
+  // Editar perfil del usuario (contacto + habilidades + zona)
+  const saveProfile = async (profile) => {
+    try { localStorage.setItem(USER_KEY, JSON.stringify(profile)); } catch {}
+    const full = { ...profile, uid };
+    setUser(full);
+    await store.upsertVolunteer(full);   // no toca done/reports
+    setEditProfile(false);
+    await refresh();
+    pushToast('Perfil actualizado', 'Tus datos se guardaron correctamente.', '✅', 'Perfil');
+  };
+
+  // Editar el contacto del coordinador (lo ven los voluntarios)
+  const saveCoord = async (c) => {
+    await store.saveCoordContact(c);
+    setCoord(c);
+    setEditCoord(false);
+    pushToast('Contacto actualizado', 'El contacto del coordinador se guardó.', '✅', 'Coordinador');
+  };
+
   return (
     <div className="app">
       <header className="topbar">
@@ -222,9 +245,9 @@ export default function Page() {
             onCoordinator={() => { if (isAdmin) { setRole('coordinador'); setCoordTab('tablero'); } else setAdminGate(true); }}
           />
         ) : role === 'coordinador' ? (
-          <Coordinador {...{ tasks, reports, volunteers, stats, boardMore, loadMore, coordTab, setCoordTab, h, openCreate: (p) => setModal({ prefill: p || null }), onConvert: (r) => setModal({ prefill: r }), onDiscard: async (id) => { await store.setReportStatus(id, 'descartado'); refresh(); } }} />
+          <Coordinador {...{ tasks, reports, volunteers, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, onEditCoord: () => setEditCoord(true), openCreate: (p) => setModal({ prefill: p || null }), onConvert: (r) => setModal({ prefill: r }), onDiscard: async (id) => { await store.setReportStatus(id, 'descartado'); refresh(); } }} />
         ) : user ? (
-          <Usuario {...{ user: { ...user, uid }, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, uid, online, volView, setVolView, h, onSendReport: sendReport, userPos, geoState, requestGeo }} />
+          <Usuario {...{ user: { ...user, uid }, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, uid, online, volView, setVolView, h, coord, onEditProfile: () => setEditProfile(true), onSendReport: sendReport, userPos, geoState, requestGeo }} />
         ) : (
           <Registro initialMode={mode} onDone={register} />
         )}
@@ -240,6 +263,9 @@ export default function Page() {
           </p>
         </div>
       )}
+
+      {editProfile && user && <EditProfileModal user={user} onClose={() => setEditProfile(false)} onSave={saveProfile} />}
+      {editCoord && <CoordContactModal coord={coord} onClose={() => setEditCoord(false)} onSave={saveCoord} />}
 
       {adminGate && <AdminGate onClose={() => setAdminGate(false)} onOk={() => {
         try { localStorage.setItem(ADMIN_KEY, '1'); } catch {}
@@ -335,6 +361,101 @@ function AdminGate({ onClose, onOk }) {
 }
 
 /* ====================================================================
+   EDITAR PERFIL — el usuario cambia su contacto y lo que ofrece
+   ==================================================================== */
+function EditProfileModal({ user, onClose, onSave }) {
+  const [name, setName] = useState(user.name || '');
+  const [phone, setPhone] = useState(user.phone || '');
+  const [cedula, setCedula] = useState(user.cedula || '');
+  const [skills, setSkills] = useState(user.skills || []);
+  const [zone, setZone] = useState(user.zone || '');
+  const [touched, setTouched] = useState(false);
+
+  const nameOk = name.trim().length >= 2;
+  const phoneOk = phone.replace(/\D/g, '').length >= 7;
+  const cedulaOk = cedula.replace(/\D/g, '').length >= 6;
+  const valid = nameOk && phoneOk && cedulaOk;
+  const toggle = (k) => setSkills((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
+  const submit = () => {
+    if (!valid) { setTouched(true); return; }
+    onSave({ name: name.trim(), phone: phone.trim(), cedula: cedula.trim(), skills, zone });
+  };
+
+  return (
+    <div className="modal-bg show" onClick={(e) => { if (e.target.classList.contains('modal-bg')) onClose(); }}>
+      <div className="modal modal-scroll" style={{ maxWidth: 560 }}>
+        <h3>Editar mis datos</h3>
+        <div className="sub">Actualiza tu contacto y lo que puedes ofrecer.</div>
+        <div className="field">
+          <label>Nombre y apellido</label>
+          <input className={`input ${touched && !nameOk ? 'invalid' : ''}`} value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Carlos Rodríguez" />
+        </div>
+        <div className="g2">
+          <div className="field">
+            <label>Teléfono</label>
+            <input className={`input ${touched && !phoneOk ? 'invalid' : ''}`} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+58 412 1234567" inputMode="tel" />
+          </div>
+          <div className="field">
+            <label>Cédula</label>
+            <input className={`input ${touched && !cedulaOk ? 'invalid' : ''}`} value={cedula} onChange={(e) => setCedula(e.target.value)} placeholder="V-12345678" inputMode="numeric" />
+          </div>
+        </div>
+        <div className="field">
+          <label>¿Qué puedes hacer?</label>
+          <div className="chips-note">Puedes seleccionar <b>varias opciones</b> — toca todas las que apliquen.</div>
+          <div className="chips two">{Object.entries(SKILLS).map(([k, s]) => (
+            <div key={k} className={`chip ${skills.includes(k) ? 'on' : ''}`} onClick={() => toggle(k)}><span>{s.icon}</span>{s.label}</div>
+          ))}</div>
+        </div>
+        <div className="field">
+          <label>Tu zona</label>
+          <select className="input" value={zone} onChange={(e) => setZone(e.target.value)}>
+            <option value="">📍 Elegir zona…</option>
+            {ZONE_KEYS.map((z) => <option key={z} value={z}>{ZONES[z].name} · {ZONES[z].sector}</option>)}
+          </select>
+        </div>
+        <div className="actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-take" onClick={submit} disabled={!valid}>Guardar cambios</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Contacto del coordinador (nombre + teléfono que ven los voluntarios) */
+function CoordContactModal({ coord, onClose, onSave }) {
+  const [name, setName] = useState(coord?.name || '');
+  const [phone, setPhone] = useState(coord?.phone || '');
+  const [touched, setTouched] = useState(false);
+  const nameOk = name.trim().length >= 2;
+  const phoneOk = phone.replace(/\D/g, '').length >= 7;
+  const valid = nameOk && phoneOk;
+  const submit = () => { if (!valid) { setTouched(true); return; } onSave({ name: name.trim(), phone: phone.trim() }); };
+
+  return (
+    <div className="modal-bg show" onClick={(e) => { if (e.target.classList.contains('modal-bg')) onClose(); }}>
+      <div className="modal" style={{ maxWidth: 440 }}>
+        <h3>Contacto del coordinador</h3>
+        <div className="sub">Es el contacto que ven los voluntarios para coordinar las tareas sin reportante.</div>
+        <div className="field">
+          <label>Nombre / organización</label>
+          <input className={`input ${touched && !nameOk ? 'invalid' : ''}`} value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Coord. Cáritas" autoFocus />
+        </div>
+        <div className="field">
+          <label>Teléfono</label>
+          <input className={`input ${touched && !phoneOk ? 'invalid' : ''}`} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+58 412 1234567" inputMode="tel" />
+        </div>
+        <div className="actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={submit} disabled={!valid}>Guardar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ====================================================================
    REGISTRO — perfil único (nombre, teléfono, cédula OBLIGATORIOS)
    ==================================================================== */
 function Registro({ initialMode, onDone }) {
@@ -401,13 +522,17 @@ function Registro({ initialMode, onDone }) {
 /* ====================================================================
    USUARIO — perfil unificado con switch Ayudar / Reportar
    ==================================================================== */
-function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, online, volView, setVolView, h, onSendReport, userPos, geoState, requestGeo }) {
+function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, online, volView, setVolView, h, coord, onEditProfile, onSendReport, userPos, geoState, requestGeo }) {
   // El contador de "Ayudas" lleva a las tareas completadas.
   const verCompletadas = () => { setMode('voluntario'); setVolView('completadas'); };
   return (
     <section className="view">
       <div className="panel prof-head">
-        <div className="who"><b>{user.name}</b><span>📞 {user.phone} &nbsp;·&nbsp; 🪪 {user.cedula}</span></div>
+        <div className="who">
+          <b>{user.name}</b>
+          <span>📞 {user.phone} &nbsp;·&nbsp; 🪪 {user.cedula}</span>
+          <button className="prof-edit" onClick={onEditProfile}>✏️ Editar mis datos</button>
+        </div>
         <div className="prof-stats">
           <button className="ps help" onClick={verCompletadas} title="Ver tus tareas completadas"><b>{counters.done}</b><span>Ayudas ›</span></button>
           <div className="ps rep"><b>{counters.reports}</b><span>Reportes</span></div>
@@ -420,13 +545,13 @@ function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boa
       </div>
 
       {mode === 'voluntario'
-        ? <VolunteerArea tasks={tasks} myTasks={myTasks} boardMore={boardMore} loadMore={loadMore} user={user} online={online} volView={volView} setVolView={setVolView} h={h} userPos={userPos} geoState={geoState} requestGeo={requestGeo} />
+        ? <VolunteerArea tasks={tasks} myTasks={myTasks} boardMore={boardMore} loadMore={loadMore} user={user} online={online} volView={volView} setVolView={setVolView} h={h} coord={coord} userPos={userPos} geoState={geoState} requestGeo={requestGeo} />
         : <ReportArea myReports={myReports} onSend={onSendReport} onSwitch={() => setMode('voluntario')} userPos={userPos} requestGeo={requestGeo} />}
     </section>
   );
 }
 
-function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volView, setVolView, h, userPos, geoState, requestGeo }) {
+function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volView, setVolView, h, coord, userPos, geoState, requestGeo }) {
   const [openId, setOpenId] = useState(null);
   const [liveActive, setLiveActive] = useState(null); // tarea en foco en TIEMPO REAL
   const [shown, setShown] = useState(5);              // muestra 5, "cargar más" suma 5
@@ -499,7 +624,7 @@ function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volV
     ) : (
       <>
         <div className="focus-note"><span>🎯</span><span>Tienes una tarea en curso. Su estado se actualiza en tiempo real. Termínala o déjala para ver otras.</span></div>
-        <div className="task-grid"><MyTaskCard t={activeT} mine={activeMine} online={online} h={hVol} /></div>
+        <div className="task-grid"><MyTaskCard t={activeT} mine={activeMine} online={online} h={hVol} coordName={coord?.name} coordPhone={coord?.phone} /></div>
       </>
     );
   }
@@ -511,7 +636,7 @@ function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volV
         <div className="section-head"><span className="kicker">Tu aporte</span><h2 style={{ fontSize: 17 }}>Tareas completadas</h2><div className="rule" />
           <button className="btn btn-primary btn-sm" onClick={verDisponibles}>🙋 Ver tareas disponibles</button></div>
         {done.length
-          ? <div className="task-grid">{done.map((o, i) => <MyTaskCard key={o.t.id} t={o.t} mine={o.mine} online={online} h={hVol} i={i} />)}</div>
+          ? <div className="task-grid">{done.map((o, i) => <MyTaskCard key={o.t.id} t={o.t} mine={o.mine} online={online} h={hVol} i={i} coordName={coord?.name} coordPhone={coord?.phone} />)}</div>
           : <Empty title="Aún no has completado tareas" sub="Toma una tarea disponible y aparecerá aquí cuando la termines." />}
         <div style={{ textAlign: 'center', marginTop: 18 }}>
           <button className="btn btn-take" onClick={verDisponibles}>🙋 Ver tareas disponibles</button>
@@ -669,13 +794,15 @@ function ReportArea({ myReports, onSend, onSwitch, userPos, requestGeo }) {
 /* ====================================================================
    COORDINADOR
    ==================================================================== */
-function Coordinador({ tasks, reports, volunteers, stats, boardMore, loadMore, coordTab, setCoordTab, h, openCreate, onConvert, onDiscard }) {
+function Coordinador({ tasks, reports, volunteers, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, onEditCoord, openCreate, onConvert, onDiscard }) {
   return (
     <section className="view">
       <div className="section-head">
         <span className="kicker">Panel del coordinador</span><h2>Operación</h2><div className="rule" />
+        <button className="btn btn-ghost btn-sm" onClick={onEditCoord}>✏️ Mi contacto</button>
         <button className="btn btn-primary btn-sm" onClick={() => openCreate()}>➕ Crear tarea</button>
       </div>
+      <div className="coord-contact-line">📞 Contacto que ven los voluntarios: <b>{coord?.name}</b> · {coord?.phone}</div>
       <div className="stats">
         <Stat n={stats.abiertas} l="Abiertas" a="var(--p-baja)" />
         <Stat n={stats.encurso} l="En curso" a="var(--p-media)" />

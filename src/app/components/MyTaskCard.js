@@ -34,9 +34,11 @@ const PHASES = [
 ];
 const IDX = { tomada: 0, curso: 1, completada: 2 };
 
-export default function MyTaskCard({ t, mine, online, h, i = 0 }) {
+export default function MyTaskCard({ t, mine, online, h, i = 0, coordName, coordPhone }) {
   const cur = IDX[mine.state] ?? 0;
   const sk = SKILLS[t.skill];
+  const cName = coordName || COORD_NAME;
+  const cPhone = coordPhone || COORD_PHONE;
 
   return (
     <article className="task mytask" data-prio={t.prio} style={{ animationDelay: `${i * 50}ms` }}>
@@ -95,13 +97,13 @@ export default function MyTaskCard({ t, mine, online, h, i = 0 }) {
         {/* Contacto (al final) */}
         {(() => {
           const isReporter = !!t.reporterPhone;
-          const num = intlNumber(isReporter ? t.reporterPhone : COORD_PHONE);
+          const num = intlNumber(isReporter ? t.reporterPhone : cPhone);
           return (
             <div className="contact-box">
               <div className="contact-who">
                 {isReporter
                   ? <>📣 Reportado por <b>{t.reporterName || 'un ciudadano'}</b> · ponte en contacto:</>
-                  : <>📞 Contacto del <b>{COORD_NAME}</b> · coordina la tarea:</>}
+                  : <>📞 Contacto del <b>{cName}</b> · coordina la tarea:</>}
               </div>
               <div className="contact-actions">
                 <a className="btn btn-primary btn-sm" href={`tel:+${num}`}>📞 Llamar</a>
