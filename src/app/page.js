@@ -1178,15 +1178,20 @@ function ExampleBoard() {
       </div>
       <div className="task-grid">
         {EXAMPLE_TASKS.map((e, i) => (
-          <div className="task example" data-prio={e.prio} key={i} style={{ animationDelay: `${i * 45}ms` }}>
+          <article className="task tidy example" data-prio={e.prio} key={i} style={{ animationDelay: `${i * 45}ms` }}>
             <span className="spine" />
-            <span className="ex-tag">Ejemplo</span>
-            <div className="head">
-              <div><div className="title">{e.title}</div><div className="loc"><span>📍</span>{e.loc}</div></div>
-              <span className="prio-tag">{PRIOS[e.prio].label}</span>
+            <div className="body">
+              <div className="top">
+                <div className="title">{e.title}</div>
+                <span className="ex-tag">Ejemplo</span>
+              </div>
+              <div className="loc">{e.loc}</div>
+              <div className="facts">
+                <span className="ex-prio" style={{ color: PRIOS[e.prio].color, background: prioBg(e.prio) }}>{PRIOS[e.prio].label}</span>
+                <span className="skill">{SKILLS[e.skill].icon} {SKILLS[e.skill].label}</span>
+              </div>
             </div>
-            <div className="body"><div className="skill-line"><span className="skill">{SKILLS[e.skill].icon} {SKILLS[e.skill].label}</span></div></div>
-          </div>
+          </article>
         ))}
       </div>
       <div className="ex-cta">¿Viste una necesidad así? Toca <b>📢 Reportar</b> arriba para avisar a la coordinación.</div>

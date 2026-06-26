@@ -537,8 +537,9 @@ button.vcard:active { transform: scale(.99); }
 /* Ejemplos en el tablero vacío */
 .examples .ex-note { font-size: 13px; line-height: 1.55; color: var(--ink-soft); background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px; padding: 13px 15px; margin-bottom: 16px; }
 .examples .ex-note b { color: var(--ink); }
-.task.example { position: relative; opacity: .9; }
-.task.example .ex-tag { position: absolute; top: 11px; right: 13px; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; z-index: 1; }
+.task.example { opacity: .92; }
+.task.example .ex-tag { flex-shrink: 0; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 3px 9px; align-self: flex-start; }
+.task.example .ex-prio { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
 .examples .ex-cta { text-align: center; font-size: 13px; color: var(--ink-soft); margin-top: 18px; }
 .examples .ex-cta b { color: var(--ve-blue); }
 
