@@ -59,6 +59,7 @@ export const SKILLS = {
   mascotas:       { label: 'Rescate / cuidado de mascotas', icon: '🐾' },
   comunicaciones: { label: 'Comunicaciones',         icon: '📡' },
   refugio:        { label: 'Refugio / alojamiento',  icon: '🏠' },
+  inspecciones:   { label: 'Realizar inspecciones',  icon: '📋' },
   logistica:      { label: 'Logística',              icon: '📦' },
 };
 

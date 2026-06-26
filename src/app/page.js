@@ -10,7 +10,7 @@ import TaskCard from './components/TaskCard';
 import TaskDetail from './components/TaskDetail';
 import MyTaskCard from './components/MyTaskCard';
 import TacticalMap from './components/TacticalMap';
-import ZonePickerMap from './components/ZonePickerMap';
+import RealMapPicker from './components/RealMapPicker';
 import {
   ZONES, ZONE_KEYS, SKILLS, PRIOS, PRIO_ORDER,
   dist, kmTo, fmtKm, taskState, avatarFor, prioBg, ago, COORD_CONTACT,
@@ -371,7 +371,8 @@ function Registro({ initialMode, onDone }) {
         </div>
         <div className="field">
           <label>¿Qué puedes hacer? <span className="hint">opcional</span></label>
-          <div className="chips">{Object.entries(SKILLS).map(([k, s]) => (
+          <div className="chips-note">Puedes seleccionar <b>varias opciones</b> — toca todas las que apliquen.</div>
+          <div className="chips two">{Object.entries(SKILLS).map(([k, s]) => (
             <div key={k} className={`chip ${skills.includes(k) ? 'on' : ''}`} onClick={() => toggle(k)}><span>{s.icon}</span>{s.label}</div>
           ))}</div>
         </div>
@@ -421,6 +422,7 @@ function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boa
 function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volTab, setVolTab, h, userPos, geoState, requestGeo }) {
   const [openId, setOpenId] = useState(null);
   const [liveActive, setLiveActive] = useState(null); // tarea en foco en TIEMPO REAL
+  const [shown, setShown] = useState(5);              // muestra 5, "cargar más" suma 5
 
   // Pide ubicación al entrar al tablero (si no se ha intentado).
   useEffect(() => { if (geoState === 'idle') requestGeo(); }, [geoState, requestGeo]);
@@ -490,11 +492,17 @@ function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volT
             </div>
           )}
           {board.length
-            ? <div className="task-grid">{board.map((o, i) => (
+            ? <div className="task-grid">{board.slice(0, shown).map((o, i) => (
                 <TaskCard key={o.t.id} t={o.t} mode="vol" i={i} h={h} distanceLabel={o.km != null ? fmtKm(o.km) : null} onOpen={() => setOpenId(o.t.id)} />
               ))}</div>
             : <Empty title="Todo cubierto" sub="No hay tareas abiertas ahora mismo. Te avisaremos cuando surja una cerca de ti." />}
-          {boardMore && <div style={{ textAlign: 'center', marginTop: 16 }}><button className="btn btn-ghost btn-sm" onClick={loadMore}>Cargar más tareas</button></div>}
+          {board.length > 0 && (shown < board.length || boardMore) && (
+            <div style={{ textAlign: 'center', marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setShown((s) => s + 5); if (shown + 5 >= board.length && boardMore) loadMore(); }}>
+                Cargar más tareas
+              </button>
+            </div>
+          )}
           {openTask && <TaskDetail t={openTask.t} mode="vol" distanceLabel={openTask.km != null ? fmtKm(openTask.km) : null} h={h} onClose={() => setOpenId(null)} />}
         </>
       ) : (
@@ -533,12 +541,28 @@ function ReportArea({ myReports, onSend, onSwitch, userPos, requestGeo }) {
     return best;
   };
 
+  const reverseGeocode = async (lat, lng) => {
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=es&zoom=18`);
+      const j = await r.json();
+      return j.display_name || '';
+    } catch { return ''; }
+  };
+
+  // Aplica una ubicación (del mapa o del GPS): marca coords, zona y dirección.
+  const applyLocation = async (lat, lng) => {
+    setCoords({ lat, lng });
+    setZone(nearestZone(lat, lng));
+    setGeoMsg('📍 Ubicación exacta marcada');
+    const addr = await reverseGeocode(lat, lng);
+    if (addr && !loc.trim()) setLoc(addr);
+  };
+
   const useMyLocation = () => {
-    const apply = (p) => { const c = { lat: p.coords.latitude, lng: p.coords.longitude }; setCoords(c); setZone(nearestZone(c.lat, c.lng)); setGeoMsg('📍 Ubicación marcada en el mapa'); };
-    if (userPos) { setCoords(userPos); setZone(nearestZone(userPos.lat, userPos.lng)); setGeoMsg('📍 Ubicación marcada en el mapa'); return; }
+    if (userPos) { applyLocation(userPos.lat, userPos.lng); return; }
     if (typeof navigator === 'undefined' || !navigator.geolocation) { setGeoMsg('No se pudo obtener la ubicación'); return; }
     setGeoMsg('Ubicando…');
-    navigator.geolocation.getCurrentPosition(apply, () => setGeoMsg('Permiso de ubicación denegado'), { enableHighAccuracy: true, timeout: 9000 });
+    navigator.geolocation.getCurrentPosition((p) => applyLocation(p.coords.latitude, p.coords.longitude), () => setGeoMsg('Permiso de ubicación denegado'), { enableHighAccuracy: true, timeout: 9000 });
     if (requestGeo) requestGeo();
   };
 
@@ -581,12 +605,12 @@ function ReportArea({ myReports, onSend, onSwitch, userPos, requestGeo }) {
         <div className="field"><label>¿Qué hace falta?</label><input className="input" value={need} onChange={(e) => setNeed(e.target.value)} placeholder="Ej. Falta agua potable en un refugio" /></div>
         <div className="field"><label>¿Dónde? <span className="hint">dirección o referencia</span></label><input className="input" value={loc} onChange={(e) => setLoc(e.target.value)} placeholder="Ej. Sector La Pastora, Caracas" /></div>
         <div className="field">
-          <label>Ubicación en el mapa <span className="hint">toca tu zona</span></label>
-          <ZonePickerMap value={zone} onPick={(z) => { setZone(z); setCoords(null); setGeoMsg(''); }} />
+          <label>Marca el lugar exacto en el mapa <span className="hint">toca el punto donde se necesita</span></label>
+          <RealMapPicker value={coords} onPick={(p) => applyLocation(p.lat, p.lng)} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
             <button className="btn btn-ghost btn-sm" onClick={useMyLocation}>📍 Usar mi ubicación actual</button>
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ve-blue)' }}>
-              {zone ? `Elegida: ${ZONES[zone].name}${geoMsg && coords ? ' · ' + geoMsg : ''}` : (geoMsg || 'Aún sin ubicación')}
+              {coords ? `📍 Ubicación marcada${zone ? ` · ${ZONES[zone].name}` : ''}` : (geoMsg || 'Toca el mapa para marcar')}
             </span>
           </div>
         </div>
