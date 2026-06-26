@@ -10,6 +10,7 @@ import TaskCard from './components/TaskCard';
 import TaskDetail from './components/TaskDetail';
 import MyTaskCard from './components/MyTaskCard';
 import TacticalMap from './components/TacticalMap';
+import ZonePickerMap from './components/ZonePickerMap';
 import {
   ZONES, ZONE_KEYS, SKILLS, PRIOS, PRIO_ORDER,
   dist, kmTo, fmtKm, taskState, avatarFor, prioBg, ago, COORD_CONTACT,
@@ -18,6 +19,8 @@ import * as store from '@/lib/store';
 
 const USER_KEY = 'tablero_user_v1';
 const ADMIN_KEY = 'tablero_admin_v1';
+const MODE_KEY = 'tablero_mode_v1';   // 'voluntario' | 'reportante'
+const VIEW_KEY = 'tablero_view_v1';   // 'usuario' | 'coordinador' (última pantalla)
 // Código de acceso del coordinador (solo la organización). Cámbialo aquí.
 const ADMIN_CODE = 'acacio';
 
@@ -66,14 +69,25 @@ export default function Page() {
       unsubs.push(store.subVolunteers((rows) => setUsers(rows)));
       try {
         const saved = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
+        const admin = localStorage.getItem(ADMIN_KEY) === '1';
+        if (admin) setIsAdmin(true);
+        const savedMode = localStorage.getItem(MODE_KEY);
+        if (savedMode) setMode(savedMode);
         if (saved) { setUser({ ...saved, uid: myUid }); store.upsertVolunteer({ ...saved, uid: myUid }); }
-        if (localStorage.getItem(ADMIN_KEY) === '1') setIsAdmin(true);
+        // Recordar la última pantalla: el usuario registrado vuelve a la suya.
+        const savedView = localStorage.getItem(VIEW_KEY);
+        if (savedView === 'coordinador' && admin) setRole('coordinador');
+        else if (saved) setRole('usuario');
       } catch {}
       setReady(true);
     })();
     const tick = setInterval(() => forceTick((n) => n + 1), 60000);
     return () => { unsubs.forEach((f) => f && f()); clearInterval(tick); };
   }, []);
+
+  // Recordar pantalla/modo (para no volver siempre al home al refrescar)
+  useEffect(() => { if (role) { try { localStorage.setItem(VIEW_KEY, role); } catch {} } }, [role]);
+  useEffect(() => { try { localStorage.setItem(MODE_KEY, mode); } catch {} }, [mode]);
 
   // Contadores en vivo del perfil
   const me = useMemo(() => users.find((v) => v.id === uid) || {}, [users, uid]);
@@ -170,7 +184,7 @@ export default function Page() {
       }} />}
 
       {modal && <CreateModal prefill={modal.prefill} onClose={() => setModal(null)} onSave={async (data, prefill) => {
-        await store.createTask(data);
+        await store.createTask({ ...data, reporterName: prefill?.reporterName || '', reporterPhone: prefill?.reporterPhone || '' });
         if (prefill?.id) store.setReportStatus(prefill.id, 'convertido');
         setModal(null);
         pushToast('Tarea publicada', `“${data.title}” ya está en el tablero.`, '📡', 'Coordinador');
@@ -335,7 +349,7 @@ function Usuario({ user, counters, mode, setMode, tasks, reports, uid, online, v
 
       {mode === 'voluntario'
         ? <VolunteerArea tasks={tasks} user={user} online={online} volTab={volTab} setVolTab={setVolTab} h={h} userPos={userPos} geoState={geoState} requestGeo={requestGeo} />
-        : <ReportArea reports={reports} uid={uid} onSend={onSendReport} onSwitch={() => setMode('voluntario')} />}
+        : <ReportArea reports={reports} uid={uid} onSend={onSendReport} onSwitch={() => setMode('voluntario')} userPos={userPos} requestGeo={requestGeo} />}
     </section>
   );
 }
@@ -407,29 +421,50 @@ function VolunteerArea({ tasks, user, online, volTab, setVolTab, h, userPos, geo
 }
 const PHASE_ORDER = { curso: 0, tomada: 1, completada: 2 };
 
-function ReportArea({ reports, uid, onSend, onSwitch }) {
+function ReportArea({ reports, uid, onSend, onSwitch, userPos, requestGeo }) {
   const [need, setNeed] = useState('');
   const [loc, setLoc] = useState('');
   const [zone, setZone] = useState('');
+  const [coords, setCoords] = useState(null);   // {lat,lng} si marca su ubicación exacta
   const [note, setNote] = useState('');
+  const [geoMsg, setGeoMsg] = useState('');
   const mine = [...reports].filter((r) => r.reporterUid === uid).sort((a, b) => b.created - a.created);
+
+  const nearestZone = (lat, lng) => {
+    let best = null, bestKm = Infinity;
+    for (const z of ZONE_KEYS) { const km = kmTo({ lat, lng }, z); if (km < bestKm) { bestKm = km; best = z; } }
+    return best;
+  };
+
+  const useMyLocation = () => {
+    const apply = (p) => { const c = { lat: p.coords.latitude, lng: p.coords.longitude }; setCoords(c); setZone(nearestZone(c.lat, c.lng)); setGeoMsg('📍 Ubicación marcada en el mapa'); };
+    if (userPos) { setCoords(userPos); setZone(nearestZone(userPos.lat, userPos.lng)); setGeoMsg('📍 Ubicación marcada en el mapa'); return; }
+    if (typeof navigator === 'undefined' || !navigator.geolocation) { setGeoMsg('No se pudo obtener la ubicación'); return; }
+    setGeoMsg('Ubicando…');
+    navigator.geolocation.getCurrentPosition(apply, () => setGeoMsg('Permiso de ubicación denegado'), { enableHighAccuracy: true, timeout: 9000 });
+    if (requestGeo) requestGeo();
+  };
 
   const submit = () => {
     if (!need.trim()) return;
-    onSend({ need: need.trim(), loc: loc.trim(), zone: zone || 'caracas', note: note.trim() });
-    setNeed(''); setLoc(''); setZone(''); setNote('');
+    onSend({ need: need.trim(), loc: loc.trim(), zone: zone || 'caracas', note: note.trim(), lat: coords?.lat ?? null, lng: coords?.lng ?? null });
+    setNeed(''); setLoc(''); setZone(''); setCoords(null); setNote(''); setGeoMsg('');
   };
 
   return (
     <>
       <div className="panel" style={{ padding: 22 }}>
         <div className="field"><label>¿Qué hace falta? <span className="req">obligatorio</span></label><input className="input" value={need} onChange={(e) => setNeed(e.target.value)} placeholder="Ej. Falta agua potable en un refugio" /></div>
-        <div className="field"><label>¿Dónde?</label><input className="input" value={loc} onChange={(e) => setLoc(e.target.value)} placeholder="Ej. Sector La Pastora, Caracas" /></div>
-        <div className="field"><label>Zona <span className="hint">ayuda a priorizar</span></label>
-          <select className="input" value={zone} onChange={(e) => setZone(e.target.value)}>
-            <option value="">Elegir zona…</option>
-            {ZONE_KEYS.map((z) => <option key={z} value={z}>{ZONES[z].name} · {ZONES[z].sector}</option>)}
-          </select>
+        <div className="field"><label>¿Dónde? <span className="hint">dirección o referencia</span></label><input className="input" value={loc} onChange={(e) => setLoc(e.target.value)} placeholder="Ej. Sector La Pastora, Caracas" /></div>
+        <div className="field">
+          <label>Ubicación en el mapa <span className="hint">toca tu zona</span></label>
+          <ZonePickerMap value={zone} onPick={(z) => { setZone(z); setCoords(null); setGeoMsg(''); }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+            <button className="btn btn-ghost btn-sm" onClick={useMyLocation}>📍 Usar mi ubicación actual</button>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ve-blue)' }}>
+              {zone ? `Elegida: ${ZONES[zone].name}${geoMsg && coords ? ' · ' + geoMsg : ''}` : (geoMsg || 'Aún sin ubicación')}
+            </span>
+          </div>
         </div>
         <div className="field"><label>Nota <span className="hint">opcional</span></label><textarea className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Detalles que ayuden al coordinador…" /></div>
         <button className="btn btn-take btn-block" disabled={!need.trim()} onClick={submit}>📨 Enviar reporte</button>
@@ -546,7 +581,7 @@ function Inbox({ reports, onConvert, onDiscard }) {
           <div className="ri">📢</div>
           <div className="rc">
             <b>{r.need}</b>
-            <div className="rl">📍 {r.loc}</div>
+            <div className="rl">📍 {r.loc}{r.lat != null && <span style={{ color: 'var(--ve-blue)', fontWeight: 600 }}> · ubicación marcada en mapa</span>}</div>
             {r.note && <div className="rn">“{r.note}”</div>}
             <div className="rs">{r.reporterName ? `Por ${r.reporterName}${r.reporterPhone ? ` · ${r.reporterPhone}` : ''}${r.reporterCedula ? ` · 🪪 ${r.reporterCedula}` : ''} · ` : ''}{ago(r.created)} · zona: {ZONES[r.zone]?.name || 'sin definir'}</div>
           </div>

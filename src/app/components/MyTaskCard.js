@@ -4,6 +4,16 @@
 import { PRIOS, SKILLS, ago } from '@/lib/model';
 import TaskMiniMap from './TaskMiniMap';
 
+// Normaliza un teléfono venezolano a formato internacional para tel:/WhatsApp.
+function intlNumber(phone) {
+  let d = (phone || '').replace(/\D/g, '');
+  if (!d) return '';
+  if (d.startsWith('58')) return d;
+  if (d.startsWith('0')) return '58' + d.slice(1);
+  if (d.length === 10) return '58' + d;
+  return d;
+}
+
 const PRIO_HEX = { alta: '#e11d48', media: '#d97706', baja: '#0d9a6c' };
 const PHASES = [
   { key: 'tomada', lab: 'Tomada' },
@@ -50,7 +60,17 @@ export default function MyTaskCard({ t, mine, online, contact, h, i = 0 }) {
 
         {sk && <div className="meta" style={{ marginTop: 6 }}><div className="row"><span className="mi">🛠️</span><span className="skill">{sk.icon} {sk.label}</span></div></div>}
 
-        <div className="contact"><span>💬</span>{contact}</div>
+        {t.reporterPhone ? (
+          <div className="contact-box">
+            <div className="contact-who">📣 Reportado por <b>{t.reporterName || 'un ciudadano'}</b> · ponte en contacto:</div>
+            <div className="contact-actions">
+              <a className="btn btn-primary btn-sm" href={`tel:+${intlNumber(t.reporterPhone)}`}>📞 Llamar</a>
+              <a className="btn btn-wa btn-sm" href={`https://wa.me/${intlNumber(t.reporterPhone)}`} target="_blank" rel="noopener noreferrer">💬 WhatsApp</a>
+            </div>
+          </div>
+        ) : (
+          <div className="contact"><span>💬</span>{contact}</div>
+        )}
 
         {!online && <div className="pend"><span className="state-badge state-pendiente"><span className="led" />Pendiente de sincronizar</span></div>}
 

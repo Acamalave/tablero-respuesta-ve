@@ -371,6 +371,15 @@ textarea.input { resize: vertical; min-height: 84px; }
 .mytask .acts { display: flex; gap: 9px; margin-top: 16px; }
 .mytask .acts .btn { flex: 1; }
 .mytask .contact { margin-top: 12px; font-size: 13px; color: var(--ink-soft); background: var(--surface-2); border-radius: 10px; padding: 10px 13px; display: flex; align-items: center; gap: 8px; }
+
+/* Contacto con el reportante (llamar / WhatsApp) */
+.contact-box { margin-top: 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px 13px; }
+.contact-who { font-size: 12.5px; color: var(--ink-soft); margin-bottom: 10px; }
+.contact-who b { color: var(--ink); font-weight: 700; }
+.contact-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.contact-actions .btn { text-decoration: none; }
+.btn-wa { background: #25D366; color: #04341b; }
+.btn-wa:hover { filter: brightness(1.05); }
 .mytask .pend { margin: 12px 0 0; }
 .mytask .done-msg { margin-top: 14px; text-align: center; font-weight: 600; color: var(--p-baja); background: var(--p-baja-bg); border-radius: 10px; padding: 11px; font-size: 14px; }
 
