@@ -1,23 +1,29 @@
 'use client';
 /* ---------------------------------------------------------------
-   Capa de datos — Firestore en tiempo real.
-   El tablero se sincroniza en vivo entre coordinador y voluntarios
-   vía onSnapshot. Offline-first nativo (persistentLocalCache).
+   Capa de datos — Firestore OPTIMIZADO PARA COSTO.
+   Reglas aplicadas (ver Optimizacion-Costos-Firestore.md):
+   #1 Sin onSnapshot sobre colecciones → lecturas bajo demanda (getDocs).
+   #2 Caché local persistente (offline-first) activada en firebase.js.
+   #3 limit() + paginación (startAfter).
+   #4 Filtros con where() en el servidor (no en el cliente).
+   #5 Resúmenes con agregación count() → ~1 lectura por conteo, no N.
+   #6 Un documento por tarea con campos denormalizados para consultar barato.
    --------------------------------------------------------------- */
 import { db, auth } from './firebase';
 import { signInAnonymously } from 'firebase/auth';
 import {
-  collection, doc, onSnapshot, runTransaction, updateDoc, setDoc,
-  getDocsFromServer, query, writeBatch, enableNetwork, disableNetwork, increment,
+  collection, doc, runTransaction, updateDoc, setDoc, getDoc,
+  getDocs, getDocsFromServer, getCountFromServer, query, where, orderBy,
+  limit, startAfter, writeBatch, enableNetwork, disableNetwork, increment,
 } from 'firebase/firestore';
 
 const TASKS = collection(db, 'tasks');
 const REPORTS = collection(db, 'reports');
 const VOLS = collection(db, 'volunteers');
 
+export const PAGE = 20; // tamaño de página del tablero
+
 /* ----- Identidad ----- */
-// uid persistente del lado del cliente (sobrevive recargas). En producción
-// se reemplaza por el uid de Firebase Auth (teléfono/SMS).
 const UID_KEY = 'tablero_uid_v1';
 export function clientUid() {
   if (typeof window === 'undefined') return 'srv';
@@ -25,47 +31,107 @@ export function clientUid() {
   if (!u) { u = 'u-' + Math.random().toString(36).slice(2, 12); localStorage.setItem(UID_KEY, u); }
   return u;
 }
-
-// Intento oportunista de auth anónima (si algún día se habilita). No bloquea.
 export function tryAnonAuth() {
   try { signInAnonymously(auth).catch(() => {}); } catch {}
 }
-
-/* ----- Suscripciones en vivo ----- */
-const snap = (ref, cb) =>
-  onSnapshot(ref, { includeMetadataChanges: true }, (s) => {
-    const rows = s.docs.map((d) => ({ id: d.id, ...d.data() }));
-    cb(rows, { fromCache: s.metadata.fromCache });
-  }, () => cb([], { fromCache: true }));
-
-export const subTasks = (cb) => snap(TASKS, cb);
-export const subReports = (cb) => snap(REPORTS, cb);
-export const subVolunteers = (cb) => snap(VOLS, cb);
 
 /* ----- Red (demo offline-first) ----- */
 export const goOffline = () => disableNetwork(db);
 export const goOnline = () => enableNetwork(db);
 
-/* ----- Mutaciones de tareas ----- */
+/* ----- Denormalización (regla #4/#6): campos que permiten consultar barato.
+   state: abierta|tomada|curso|completada|cancelada
+   active: true si la tarea sigue en el tablero (abierta/tomada/curso)
+   takerUids: uids que participan (para "Mis tareas" con array-contains) ----- */
+function denorm(t) {
+  const taken = t.takenBy || [];
+  let state;
+  if (t.status === 'cancelada') state = 'cancelada';
+  else {
+    const active = taken.filter((x) => x.state !== 'completada');
+    const filled = taken.length - active.length;
+    if (filled >= t.need) state = 'completada';
+    else if (active.length === 0) state = 'abierta';
+    else if (active.some((x) => x.state === 'curso')) state = 'curso';
+    else state = 'tomada';
+  }
+  const active = state === 'abierta' || state === 'tomada' || state === 'curso';
+  const takerUids = [...new Set(taken.map((x) => x.uid).filter(Boolean))];
+  return { state, active, takerUids };
+}
+const row = (d) => ({ id: d.id, ...d.data() });
+
+/* ============================================================
+   LECTURAS BAJO DEMANDA (regla #1, #3, #4)
+   ============================================================ */
+
+// Tablero: solo tareas activas, ordenadas y paginadas (no toda la colección).
+export async function fetchBoard(after = null) {
+  const base = [where('active', '==', true), orderBy('created', 'desc')];
+  const q = after
+    ? query(TASKS, ...base, startAfter(after), limit(PAGE))
+    : query(TASKS, ...base, limit(PAGE));
+  const snap = await getDocs(q);
+  const docs = snap.docs;
+  return { rows: docs.map(row), last: docs[docs.length - 1] || null, more: docs.length === PAGE };
+}
+
+// "Mis tareas": solo las del usuario (array-contains) — no escanea el tablero.
+export async function fetchMyTasks(uid) {
+  if (!uid) return [];
+  const snap = await getDocs(query(TASKS, where('takerUids', 'array-contains', uid), limit(10)));
+  return snap.docs.map(row);
+}
+
+// Bandeja del coordinador: solo reportes pendientes.
+export async function fetchPendingReports() {
+  const snap = await getDocs(query(REPORTS, where('status', '==', 'pendiente'), orderBy('created', 'desc'), limit(40)));
+  return snap.docs.map(row);
+}
+// Reportes de un usuario.
+export async function fetchMyReports(uid) {
+  if (!uid) return [];
+  const snap = await getDocs(query(REPORTS, where('reporterUid', '==', uid), orderBy('created', 'desc'), limit(20)));
+  return snap.docs.map(row);
+}
+export async function fetchVolunteers() {
+  const snap = await getDocs(query(VOLS, limit(60)));
+  return snap.docs.map(row);
+}
+export async function fetchUser(uid) {
+  if (!uid) return null;
+  const s = await getDoc(doc(VOLS, uid));
+  return s.exists() ? row(s) : null;
+}
+
+// Resumen del coordinador con agregación count() (regla #5): ~1 lectura/conteo.
+export async function fetchStats() {
+  const cTasks = async (...cs) => (await getCountFromServer(query(TASKS, ...cs))).data().count;
+  const [abiertas, tomadas, curso, completadas, pend] = await Promise.all([
+    cTasks(where('state', '==', 'abierta')),
+    cTasks(where('state', '==', 'tomada')),
+    cTasks(where('state', '==', 'curso')),
+    cTasks(where('state', '==', 'completada')),
+    (async () => (await getCountFromServer(query(REPORTS, where('status', '==', 'pendiente')))).data().count)(),
+  ]);
+  return { abiertas, encurso: tomadas + curso, completadas, pend };
+}
+
+/* ============================================================
+   MUTACIONES (escriben también los campos denormalizados)
+   ============================================================ */
 export async function createTask(data) {
   const ref = doc(TASKS);
-  await setDoc(ref, {
-    title: data.title,
-    prio: data.prio || 'media',
-    zone: data.zone || 'caracas',
-    loc: data.loc || '',
-    need: Math.max(1, parseInt(data.need) || 1),
-    skill: data.skill || null,
-    reporterName: data.reporterName || '',
-    reporterPhone: data.reporterPhone || '',
-    created: Date.now(),
-    takenBy: [],
-    status: 'activa',
-  });
+  const base = {
+    title: data.title, prio: data.prio || 'media', zone: data.zone || 'caracas', loc: data.loc || '',
+    need: Math.max(1, parseInt(data.need) || 1), skill: data.skill || null,
+    reporterName: data.reporterName || '', reporterPhone: data.reporterPhone || '',
+    created: Date.now(), takenBy: [], status: 'activa',
+  };
+  await setDoc(ref, { ...base, ...denorm(base) });
   return ref.id;
 }
 
-// Toma un cupo de forma segura (transacción) — resuelve la carrera por el último cupo.
 export async function takeTask(taskId, volunteer) {
   const ref = doc(TASKS, taskId);
   return runTransaction(db, async (tx) => {
@@ -74,9 +140,9 @@ export async function takeTask(taskId, volunteer) {
     const t = s.data();
     const taken = (t.takenBy || []).filter((x) => x.state !== 'completada' && x.state !== 'soltada');
     if (taken.length >= t.need) throw new Error('cupo-lleno');
-    if ((t.takenBy || []).some((x) => x.uid === volunteer.uid && x.state !== 'completada' && x.state !== 'soltada'))
-      return 'ya-tomada';
-    tx.update(ref, { takenBy: [...(t.takenBy || []), { name: volunteer.name, uid: volunteer.uid, state: 'tomada' }] });
+    if ((t.takenBy || []).some((x) => x.uid === volunteer.uid && x.state !== 'completada' && x.state !== 'soltada')) return 'ya-tomada';
+    const takenBy = [...(t.takenBy || []), { name: volunteer.name, uid: volunteer.uid, state: 'tomada' }];
+    tx.update(ref, { takenBy, ...denorm({ ...t, takenBy }) });
     return 'ok';
   });
 }
@@ -87,13 +153,11 @@ async function mutateMine(taskId, uid, fn) {
     const s = await tx.get(ref);
     if (!s.exists()) return;
     const t = s.data();
-    const next = (t.takenBy || []).map((x) =>
-      x.uid === uid && x.state !== 'completada' && x.state !== 'soltada' ? fn(x) : x
-    );
-    tx.update(ref, { takenBy: next });
+    const takenBy = (t.takenBy || []).map((x) =>
+      x.uid === uid && x.state !== 'completada' && x.state !== 'soltada' ? fn(x) : x);
+    tx.update(ref, { takenBy, ...denorm({ ...t, takenBy }) });
   });
 }
-
 export const startTask = (taskId, uid) => mutateMine(taskId, uid, (x) => ({ ...x, state: 'curso' }));
 export const completeTask = (taskId, uid) => mutateMine(taskId, uid, (x) => ({ ...x, state: 'completada' }));
 
@@ -103,8 +167,8 @@ export async function releaseTask(taskId, uid) {
     const s = await tx.get(ref);
     if (!s.exists()) return;
     const t = s.data();
-    const next = (t.takenBy || []).filter((x) => !(x.uid === uid && x.state !== 'completada'));
-    tx.update(ref, { takenBy: next });
+    const takenBy = (t.takenBy || []).filter((x) => !(x.uid === uid && x.state !== 'completada'));
+    tx.update(ref, { takenBy, ...denorm({ ...t, takenBy }) });
   });
 }
 
@@ -112,48 +176,37 @@ const ORDER = ['alta', 'media', 'baja'];
 export const cyclePrio = (taskId, current) =>
   updateDoc(doc(TASKS, taskId), { prio: ORDER[(ORDER.indexOf(current) + 1) % 3] });
 
-export const cancelTask = (taskId) => updateDoc(doc(TASKS, taskId), { status: 'cancelada' });
+export const cancelTask = (taskId) =>
+  updateDoc(doc(TASKS, taskId), { status: 'cancelada', state: 'cancelada', active: false });
 
-/* ----- Voluntarios ----- */
-// Perfil unificado del usuario (vale para voluntario y/o reportante).
+/* ----- Perfil unificado ----- */
 export async function upsertVolunteer(v) {
   const data = { name: v.name, zone: v.zone || null, skills: v.skills || [], phone: v.phone || '', cedula: v.cedula || '' };
-  // done/reports solo se escriben en el registro; no se pisan al recargar/sincronizar.
   if (typeof v.done === 'number') data.done = v.done;
   if (typeof v.reports === 'number') data.reports = v.reports;
   await setDoc(doc(VOLS, v.uid), data, { merge: true });
 }
-export const bumpVolunteerDone = (uid) =>
-  updateDoc(doc(VOLS, uid), { done: increment(1) }).catch(() => {});
-export const bumpReports = (uid) =>
-  updateDoc(doc(VOLS, uid), { reports: increment(1) }).catch(() => {});
+export const bumpVolunteerDone = (uid) => updateDoc(doc(VOLS, uid), { done: increment(1) }).catch(() => {});
+export const bumpReports = (uid) => updateDoc(doc(VOLS, uid), { reports: increment(1) }).catch(() => {});
 
 /* ----- Reportes ----- */
 export async function createReport(data) {
   const ref = doc(REPORTS);
   await setDoc(ref, {
-    need: data.need,
-    loc: data.loc || 'Sin ubicación precisa',
-    zone: data.zone || 'caracas',
-    lat: data.lat ?? null,
-    lng: data.lng ?? null,
-    note: data.note || '',
-    reporterUid: data.uid || null,
-    reporterName: data.reporterName || '',
-    reporterPhone: data.reporterPhone || '',
-    reporterCedula: data.reporterCedula || '',
-    created: Date.now(),
-    status: 'pendiente',
+    need: data.need, loc: data.loc || 'Sin ubicación precisa', zone: data.zone || 'caracas',
+    lat: data.lat ?? null, lng: data.lng ?? null, note: data.note || '',
+    reporterUid: data.uid || null, reporterName: data.reporterName || '',
+    reporterPhone: data.reporterPhone || '', reporterCedula: data.reporterCedula || '',
+    created: Date.now(), status: 'pendiente',
   });
   return ref.id;
 }
 export const setReportStatus = (id, status) => updateDoc(doc(REPORTS, id), { status });
 
-/* ----- Semilla (solo si está vacío) ----- */
+/* ----- Semilla (solo si está vacío; consulta el servidor) ----- */
 export async function seedIfEmpty() {
-  // Consulta el SERVIDOR (no la caché local) para no resembrar sobre datos viejos.
   let existing;
-  try { existing = await getDocsFromServer(query(TASKS)); } catch { return false; }
+  try { existing = await getDocsFromServer(query(TASKS, limit(1))); } catch { return false; }
   if (!existing.empty) return false;
   const now = Date.now(), min = 60 * 1000;
   const batch = writeBatch(db);
@@ -168,7 +221,7 @@ export async function seedIfEmpty() {
     { id: 'seed-t7', title: 'Clasificar donaciones', prio: 'baja', zone: 'valencia', loc: 'Galpón Cruz Roja, Valencia', need: 4, skill: 'logistica', created: now - 180 * min, takenBy: [{ name: 'Luis M.', uid: 'seed-v4', state: 'tomada' }] },
     { id: 'seed-t8', title: 'Reparto de colchonetas', prio: 'media', zone: 'yumare', loc: 'Cancha techada, Yumare', need: 2, skill: 'fuerza', created: now - 50 * min, takenBy: [] },
   ];
-  tasks.forEach(({ id, ...t }) => batch.set(doc(TASKS, id), { ...t, status: 'activa' }));
+  tasks.forEach(({ id, ...t }) => { const base = { ...t, status: 'activa' }; batch.set(doc(TASKS, id), { ...base, ...denorm(base) }); });
 
   const vols = [
     { uid: 'seed-v1', name: 'María G.', zone: 'sanfelipe', skills: ['cocina', 'logistica'], done: 4 },

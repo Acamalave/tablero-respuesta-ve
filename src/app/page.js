@@ -35,11 +35,18 @@ export default function Page() {
   const [uid, setUid] = useState(null);
   const [role, setRole] = useState(null);          // null | 'coordinador' | 'usuario'
   const [mode, setMode] = useState('voluntario');  // 'voluntario' | 'reportante'
-  const [tasks, setTasks] = useState([]);
-  const [reports, setReports] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [tasks, setTasks] = useState([]);          // página del tablero (tareas activas)
+  const [boardLast, setBoardLast] = useState(null); // cursor de paginación
+  const [boardMore, setBoardMore] = useState(false);
+  const [myTasks, setMyTasks] = useState([]);      // tareas del voluntario
+  const [reports, setReports] = useState([]);      // reportes pendientes (coordinador)
+  const [myReports, setMyReports] = useState([]);  // reportes del usuario
+  const [volunteers, setVolunteers] = useState([]);
+  const [stats, setStats] = useState({ abiertas: 0, encurso: 0, completadas: 0, pend: 0 });
+  const [me, setMe] = useState({});                // perfil propio (contadores)
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(0);
   const [online, setOnline] = useState(true);
-  const [fromCache, setFromCache] = useState(false);
   const [coordTab, setCoordTab] = useState('tablero');
   const [volTab, setVolTab] = useState('tablero');
   const [user, setUser] = useState(null);
@@ -57,16 +64,13 @@ export default function Page() {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4600);
   }, []);
 
+  // Arranque: SIN listeners de colección (regla #1). Carga bajo demanda.
   useEffect(() => {
-    let unsubs = [];
     (async () => {
       store.tryAnonAuth();
       const myUid = store.clientUid();
       setUid(myUid);
       try { await store.seedIfEmpty(); } catch {}
-      unsubs.push(store.subTasks((rows, meta) => { setTasks(rows); setFromCache(meta.fromCache); }));
-      unsubs.push(store.subReports((rows) => setReports(rows)));
-      unsubs.push(store.subVolunteers((rows) => setUsers(rows)));
       try {
         const saved = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
         const admin = localStorage.getItem(ADMIN_KEY) === '1';
@@ -74,24 +78,61 @@ export default function Page() {
         const savedMode = localStorage.getItem(MODE_KEY);
         if (savedMode) setMode(savedMode);
         if (saved) { setUser({ ...saved, uid: myUid }); store.upsertVolunteer({ ...saved, uid: myUid }); }
-        // Recordar la última pantalla: el usuario registrado vuelve a la suya.
         const savedView = localStorage.getItem(VIEW_KEY);
         if (savedView === 'coordinador' && admin) setRole('coordinador');
         else if (saved) setRole('usuario');
       } catch {}
       setReady(true);
     })();
-    const tick = setInterval(() => forceTick((n) => n + 1), 60000);
-    return () => { unsubs.forEach((f) => f && f()); clearInterval(tick); };
+    const tick = setInterval(() => forceTick((n) => n + 1), 60000); // solo refresca "hace X min"
+    return () => clearInterval(tick);
   }, []);
 
   // Recordar pantalla/modo (para no volver siempre al home al refrescar)
   useEffect(() => { if (role) { try { localStorage.setItem(VIEW_KEY, role); } catch {} } }, [role]);
   useEffect(() => { try { localStorage.setItem(MODE_KEY, mode); } catch {} }, [mode]);
 
-  // Contadores en vivo del perfil
-  const me = useMemo(() => users.find((v) => v.id === uid) || {}, [users, uid]);
   const counters = { done: me.done || 0, reports: me.reports || 0 };
+
+  // Carga bajo demanda según la pantalla activa (lee solo lo necesario).
+  const refresh = useCallback(async () => {
+    if (!ready || !role) return;
+    setRefreshing(true);
+    try {
+      if (role === 'coordinador') {
+        const [board, st] = await Promise.all([store.fetchBoard(), store.fetchStats()]);
+        setTasks(board.rows); setBoardLast(board.last); setBoardMore(board.more); setStats(st);
+        if (coordTab === 'reportes') setReports(await store.fetchPendingReports());
+        else if (coordTab === 'voluntarios') setVolunteers(await store.fetchVolunteers());
+      } else if (role === 'usuario' && uid) {
+        const meDoc = await store.fetchUser(uid); if (meDoc) setMe(meDoc);
+        if (mode === 'voluntario') {
+          const [board, mt] = await Promise.all([store.fetchBoard(), store.fetchMyTasks(uid)]);
+          setTasks(board.rows); setBoardLast(board.last); setBoardMore(board.more); setMyTasks(mt);
+        } else {
+          setMyReports(await store.fetchMyReports(uid));
+        }
+      }
+      setLastUpdated(Date.now());
+    } catch { /* offline: la caché local sirve los últimos datos */ }
+    finally { setRefreshing(false); }
+  }, [ready, role, mode, coordTab, uid]);
+
+  // Refresca al cambiar de pantalla + auto-refresco largo SOLO en primer plano (regla #1).
+  useEffect(() => {
+    if (!ready || !role) return;
+    refresh();
+    const id = setInterval(() => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') refresh();
+    }, 90000);
+    return () => clearInterval(id);
+  }, [ready, role, mode, coordTab, refresh]);
+
+  const loadMore = useCallback(async () => {
+    if (!boardMore) return;
+    const board = await store.fetchBoard(boardLast);
+    setTasks((prev) => [...prev, ...board.rows]); setBoardLast(board.last); setBoardMore(board.more);
+  }, [boardMore, boardLast]);
 
   const requestGeo = useCallback(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) { setGeoState('denied'); return; }
@@ -115,28 +156,31 @@ export default function Page() {
       try {
         const r = await store.takeTask(id, { name: user.name, uid });
         if (r === 'ok') { setVolTab('mis'); pushToast('Tomaste esta tarea', 'La encuentras en "Mis tareas" con sus fases.', '✅', online ? 'Confirmado' : 'Pendiente'); }
+        await refresh();
       } catch (e) {
         if (String(e.message).includes('cupo')) pushToast('Cupo lleno', 'Otra persona tomó el último cupo.', '⚠️', 'Aviso');
       }
     },
-    start: (id) => store.startTask(id, uid),
-    complete: async (id) => { await store.completeTask(id, uid); store.bumpVolunteerDone(uid); pushToast('¡Tarea completada!', 'Suma a tus ayudas. Gracias por responder.', '🎉', 'Logrado'); },
-    release: async (id) => { await store.releaseTask(id, uid); pushToast('Tarea liberada', 'Vuelve a estar disponible para otro voluntario.', '↩️', 'Aviso'); },
-    cyclePrio: (id, cur) => store.cyclePrio(id, cur),
-    cancel: async (id) => { await store.cancelTask(id); pushToast('Tarea cerrada', 'Salió del tablero activo.', '🗑️', 'Coordinador'); },
+    start: async (id) => { await store.startTask(id, uid); await refresh(); },
+    complete: async (id) => { await store.completeTask(id, uid); await store.bumpVolunteerDone(uid); await refresh(); pushToast('¡Tarea completada!', 'Suma a tus ayudas. Gracias por responder.', '🎉', 'Logrado'); },
+    release: async (id) => { await store.releaseTask(id, uid); await refresh(); pushToast('Tarea liberada', 'Vuelve a estar disponible para otro voluntario.', '↩️', 'Aviso'); },
+    cyclePrio: async (id, cur) => { await store.cyclePrio(id, cur); await refresh(); },
+    cancel: async (id) => { await store.cancelTask(id); await refresh(); pushToast('Tarea cerrada', 'Salió del tablero activo.', '🗑️', 'Coordinador'); },
   };
 
   const sendReport = async (data) => {
     await store.createReport({ ...data, uid, reporterName: user.name, reporterPhone: user.phone, reporterCedula: user.cedula });
-    store.bumpReports(uid);
+    await store.bumpReports(uid);
+    await refresh();
     pushToast('Reporte enviado', 'Un coordinador lo revisará pronto. Gracias por avisar.', '📨', 'Reporte');
   };
 
-  const register = (profile) => {
+  const register = async (profile) => {
     try { localStorage.setItem(USER_KEY, JSON.stringify(profile)); } catch {}
     const full = { ...profile, uid };
     setUser(full);
-    store.upsertVolunteer({ ...full, done: 0, reports: 0 });
+    await store.upsertVolunteer({ ...full, done: 0, reports: 0 });
+    await refresh();
     pushToast('¡Perfil creado!', 'Ya puedes ayudar y reportar con el mismo perfil.', '🙌', 'Bienvenido');
   };
 
@@ -152,9 +196,13 @@ export default function Page() {
         </div>
         <div className="topbar-spacer" />
         {role && <button className="role-back" onClick={() => setRole(null)}><span className="pin">⇆</span><span className="rb-text">Inicio</span></button>}
-        <button className={`netchip ${!online ? 'off' : fromCache ? 'syncing' : ''}`} onClick={toggleNet} title="Alternar conexión (offline-first)">
+        {role && <button className="role-back" onClick={refresh} disabled={refreshing} title="Actualizar el tablero">
+          <span className="pin" style={{ display: 'inline-block', animation: refreshing ? 'spin .8s linear infinite' : 'none' }}>↻</span>
+          <span className="rb-text">{refreshing ? 'Actualizando' : 'Actualizar'}</span>
+        </button>}
+        <button className={`netchip ${!online ? 'off' : ''}`} onClick={toggleNet} title="Alternar conexión (offline-first)">
           <span className="dot" />
-          <span>{online ? (fromCache ? 'Conectando' : 'En línea') : 'Sin red'}</span>
+          <span>{online ? 'En línea' : 'Sin red'}</span>
         </button>
       </header>
 
@@ -168,15 +216,15 @@ export default function Page() {
             onCoordinator={() => { if (isAdmin) { setRole('coordinador'); setCoordTab('tablero'); } else setAdminGate(true); }}
           />
         ) : role === 'coordinador' ? (
-          <Coordinador {...{ tasks, reports, volunteers: users, coordTab, setCoordTab, h, openCreate: (p) => setModal({ prefill: p || null }), onConvert: (r) => setModal({ prefill: r }), onDiscard: (id) => store.setReportStatus(id, 'descartado') }} />
+          <Coordinador {...{ tasks, reports, volunteers, stats, boardMore, loadMore, coordTab, setCoordTab, h, openCreate: (p) => setModal({ prefill: p || null }), onConvert: (r) => setModal({ prefill: r }), onDiscard: async (id) => { await store.setReportStatus(id, 'descartado'); refresh(); } }} />
         ) : user ? (
-          <Usuario {...{ user: { ...user, uid }, counters, mode, setMode, tasks, reports, uid, online, volTab, setVolTab, h, onSendReport: sendReport, userPos, geoState, requestGeo }} />
+          <Usuario {...{ user: { ...user, uid }, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, uid, online, volTab, setVolTab, h, onSendReport: sendReport, userPos, geoState, requestGeo }} />
         ) : (
           <Registro initialMode={mode} onDone={register} />
         )}
       </main>
 
-      {role && <p className="demo-note">Tiempo real con <b>Firebase Firestore</b> · ábrela en dos ventanas y verás el tablero actualizarse en vivo · prueba <b>Sin red</b> para el modo offline</p>}
+      {role && <p className="demo-note">Optimizado para costo (Firestore): el tablero se carga <b>bajo demanda</b>, sin lecturas en vivo · pulsa <b>Actualizar</b> para refrescar{lastUpdated ? ` · actualizado ${ago(lastUpdated)}` : ''} · <b>Sin red</b> usa la caché local</p>}
 
       {adminGate && <AdminGate onClose={() => setAdminGate(false)} onOk={() => {
         try { localStorage.setItem(ADMIN_KEY, '1'); } catch {}
@@ -185,8 +233,9 @@ export default function Page() {
 
       {modal && <CreateModal prefill={modal.prefill} onClose={() => setModal(null)} onSave={async (data, prefill) => {
         await store.createTask({ ...data, reporterName: prefill?.reporterName || '', reporterPhone: prefill?.reporterPhone || '' });
-        if (prefill?.id) store.setReportStatus(prefill.id, 'convertido');
+        if (prefill?.id) await store.setReportStatus(prefill.id, 'convertido');
         setModal(null);
+        await refresh();
         pushToast('Tarea publicada', `“${data.title}” ya está en el tablero.`, '📡', 'Coordinador');
       }} />}
 
@@ -331,7 +380,7 @@ function Registro({ initialMode, onDone }) {
 /* ====================================================================
    USUARIO — perfil unificado con switch Ayudar / Reportar
    ==================================================================== */
-function Usuario({ user, counters, mode, setMode, tasks, reports, uid, online, volTab, setVolTab, h, onSendReport, userPos, geoState, requestGeo }) {
+function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, online, volTab, setVolTab, h, onSendReport, userPos, geoState, requestGeo }) {
   return (
     <section className="view">
       <div className="panel prof-head">
@@ -348,23 +397,23 @@ function Usuario({ user, counters, mode, setMode, tasks, reports, uid, online, v
       </div>
 
       {mode === 'voluntario'
-        ? <VolunteerArea tasks={tasks} user={user} online={online} volTab={volTab} setVolTab={setVolTab} h={h} userPos={userPos} geoState={geoState} requestGeo={requestGeo} />
-        : <ReportArea reports={reports} uid={uid} onSend={onSendReport} onSwitch={() => setMode('voluntario')} userPos={userPos} requestGeo={requestGeo} />}
+        ? <VolunteerArea tasks={tasks} myTasks={myTasks} boardMore={boardMore} loadMore={loadMore} user={user} online={online} volTab={volTab} setVolTab={setVolTab} h={h} userPos={userPos} geoState={geoState} requestGeo={requestGeo} />
+        : <ReportArea myReports={myReports} onSend={onSendReport} onSwitch={() => setMode('voluntario')} userPos={userPos} requestGeo={requestGeo} />}
     </section>
   );
 }
 
-function VolunteerArea({ tasks, user, online, volTab, setVolTab, h, userPos, geoState, requestGeo }) {
+function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volTab, setVolTab, h, userPos, geoState, requestGeo }) {
   const [openId, setOpenId] = useState(null);
-  const hasMine = (t) => (t.takenBy || []).some((x) => x.uid === user.uid && x.state !== 'soltada');
 
   // Pide ubicación al entrar al tablero (si no se ha intentado).
   useEffect(() => { if (geoState === 'idle') requestGeo(); }, [geoState, requestGeo]);
 
+  // Tablero = página de tareas activas del servidor, sin las que ya tomé. Orden en cliente.
   const board = useMemo(() => {
     const ref = user.zone;
-    return tasks
-      .filter((t) => ['abierta', 'tomada', 'curso'].includes(taskState(t)) && !hasMine(t))
+    return (tasks || [])
+      .filter((t) => !(t.takerUids || []).includes(user.uid))
       .map((t) => {
         const km = userPos ? kmTo(userPos, t.zone) : null;
         const proximity = km != null ? km : (ref ? dist(ref, t.zone) : 50);
@@ -373,14 +422,14 @@ function VolunteerArea({ tasks, user, online, volTab, setVolTab, h, userPos, geo
       .sort((a, b) => PRIO_ORDER[a.t.prio] - PRIO_ORDER[b.t.prio] || a.proximity - b.proximity || a.skillMatch - b.skillMatch || b.t.created - a.t.created);
   }, [tasks, user, userPos]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const mine = useMemo(() => tasks
+  // Mis tareas = consulta directa por uid (array-contains).
+  const mine = useMemo(() => (myTasks || [])
     .map((t) => ({ t, mine: (t.takenBy || []).find((x) => x.uid === user.uid && x.state !== 'soltada') }))
     .filter((o) => o.mine)
     .sort((a, b) => (PHASE_ORDER[a.mine.state] - PHASE_ORDER[b.mine.state]) || b.t.created - a.t.created),
-  [tasks, user.uid]);
+  [myTasks, user.uid]);
 
   const openTask = board.find((o) => o.t.id === openId);
-  // Una tarea a la vez: si hay una en curso, el voluntario se enfoca en ella.
   const active = mine.find((o) => o.mine.state === 'tomada' || o.mine.state === 'curso');
   const done = mine.filter((o) => o.mine.state === 'completada');
 
@@ -392,7 +441,6 @@ function VolunteerArea({ tasks, user, online, volTab, setVolTab, h, userPos, geo
       </div>
 
       {active ? (
-        // Foco en la tarea activa: aparece bajo el perfil hasta finalizar o dejarla.
         <>
           <div className="focus-note"><span>🎯</span><span>Tienes una tarea en curso. Termínala o déjala para ver y tomar otras.</span></div>
           <div className="task-grid"><MyTaskCard t={active.t} mine={active.mine} online={online} contact={COORD_CONTACT} h={h} /></div>
@@ -409,6 +457,7 @@ function VolunteerArea({ tasks, user, online, volTab, setVolTab, h, userPos, geo
                 <TaskCard key={o.t.id} t={o.t} mode="vol" i={i} h={h} distanceLabel={o.km != null ? fmtKm(o.km) : null} onOpen={() => setOpenId(o.t.id)} />
               ))}</div>
             : <Empty title="Todo cubierto" sub="No hay tareas abiertas ahora mismo. Te avisaremos cuando surja una cerca de ti." />}
+          {boardMore && <div style={{ textAlign: 'center', marginTop: 16 }}><button className="btn btn-ghost btn-sm" onClick={loadMore}>Cargar más tareas</button></div>}
           {openTask && <TaskDetail t={openTask.t} mode="vol" distanceLabel={openTask.km != null ? fmtKm(openTask.km) : null} h={h} onClose={() => setOpenId(null)} />}
         </>
       ) : (
@@ -421,14 +470,14 @@ function VolunteerArea({ tasks, user, online, volTab, setVolTab, h, userPos, geo
 }
 const PHASE_ORDER = { curso: 0, tomada: 1, completada: 2 };
 
-function ReportArea({ reports, uid, onSend, onSwitch, userPos, requestGeo }) {
+function ReportArea({ myReports, onSend, onSwitch, userPos, requestGeo }) {
   const [need, setNeed] = useState('');
   const [loc, setLoc] = useState('');
   const [zone, setZone] = useState('');
   const [coords, setCoords] = useState(null);   // {lat,lng} si marca su ubicación exacta
   const [note, setNote] = useState('');
   const [geoMsg, setGeoMsg] = useState('');
-  const mine = [...reports].filter((r) => r.reporterUid === uid).sort((a, b) => b.created - a.created);
+  const mine = [...(myReports || [])];
 
   const nearestZone = (lat, lng) => {
     let best = null, bestKm = Infinity;
@@ -490,32 +539,27 @@ function ReportArea({ reports, uid, onSend, onSwitch, userPos, requestGeo }) {
 /* ====================================================================
    COORDINADOR
    ==================================================================== */
-function Coordinador({ tasks, reports, volunteers, coordTab, setCoordTab, h, openCreate, onConvert, onDiscard }) {
-  const open = tasks.filter((t) => taskState(t) === 'abierta').length;
-  const curso = tasks.filter((t) => ['tomada', 'curso'].includes(taskState(t))).length;
-  const done = tasks.filter((t) => taskState(t) === 'completada').length;
-  const pend = reports.filter((r) => r.status === 'pendiente').length;
-
+function Coordinador({ tasks, reports, volunteers, stats, boardMore, loadMore, coordTab, setCoordTab, h, openCreate, onConvert, onDiscard }) {
   return (
     <section className="view">
       <div className="section-head">
-        <span className="kicker">Panel del coordinador</span><h2>Operación en vivo</h2><div className="rule" />
+        <span className="kicker">Panel del coordinador</span><h2>Operación</h2><div className="rule" />
         <button className="btn btn-primary btn-sm" onClick={() => openCreate()}>➕ Crear tarea</button>
       </div>
       <div className="stats">
-        <Stat n={open} l="Abiertas" a="var(--p-baja)" />
-        <Stat n={curso} l="En curso" a="var(--p-media)" />
-        <Stat n={done} l="Completadas" a="var(--ink-faint)" />
-        <Stat n={pend} l="Por revisar" a="var(--ve-red)" />
+        <Stat n={stats.abiertas} l="Abiertas" a="var(--p-baja)" />
+        <Stat n={stats.encurso} l="En curso" a="var(--p-media)" />
+        <Stat n={stats.completadas} l="Completadas" a="var(--ink-faint)" />
+        <Stat n={stats.pend} l="Por revisar" a="var(--ve-red)" />
       </div>
       <div className="subtabs">
         {[['tablero', '🗂️ Tablero'], ['voluntarios', '👥 Personas'], ['mapa', '🗺️ Mapa'], ['reportes', '📥 Reportes']].map(([k, lbl]) => (
           <button key={k} className={coordTab === k ? 'active' : ''} onClick={() => setCoordTab(k)}>
-            {lbl}{k === 'voluntarios' && <span className="count">{volunteers.length}</span>}{k === 'reportes' && <span className="count">{pend}</span>}
+            {lbl}{k === 'reportes' && <span className="count">{stats.pend}</span>}
           </button>
         ))}
       </div>
-      {coordTab === 'tablero' && <CoordBoard tasks={tasks} h={h} />}
+      {coordTab === 'tablero' && <CoordBoard tasks={tasks} h={h} boardMore={boardMore} loadMore={loadMore} />}
       {coordTab === 'voluntarios' && <Roster volunteers={volunteers} />}
       {coordTab === 'mapa' && <TacticalMap tasks={tasks} />}
       {coordTab === 'reportes' && <Inbox reports={reports} onConvert={onConvert} onDiscard={onDiscard} />}
@@ -527,7 +571,7 @@ function Stat({ n, l, a }) {
   return <div className="stat" style={{ '--accent': a }}><div className="num">{n}</div><div className="lbl">{l}</div></div>;
 }
 
-function CoordBoard({ tasks, h }) {
+function CoordBoard({ tasks, h, boardMore, loadMore }) {
   const [openId, setOpenId] = useState(null);
   const openTask = tasks.find((t) => t.id === openId);
   const groups = ['alta', 'media', 'baja'].map((prio) => {
@@ -547,6 +591,7 @@ function CoordBoard({ tasks, h }) {
   return (
     <>
       {groups.some(Boolean) ? groups : <Empty title="Sin tareas activas" sub="Crea la primera tarea para empezar a coordinar." />}
+      {boardMore && <div style={{ textAlign: 'center', marginTop: 8 }}><button className="btn btn-ghost btn-sm" onClick={loadMore}>Cargar más tareas</button></div>}
       {openTask && <TaskDetail t={openTask} mode="coord" h={h} onClose={() => setOpenId(null)} />}
     </>
   );
