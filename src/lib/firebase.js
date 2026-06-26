@@ -12,6 +12,7 @@ import {
   persistentMultipleTabManager,
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FB_API_KEY || 'AIzaSyDXdORxDQ6OMG2vVM5uP5Kd5T9axUZfp64',
@@ -23,6 +24,23 @@ const firebaseConfig = {
 };
 
 export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+
+// ── App Check (anti-abuso / anti-bots) ──────────────────────────────────────
+// Exige que las peticiones a Firestore vengan de la app real (atestación con
+// reCAPTCHA v3), no de scripts/curl. La clave de sitio reCAPTCHA es PÚBLICA.
+// Mientras esté vacía, App Check no se inicializa (seguro desplegar sin clave).
+const APPCHECK_SITE_KEY = process.env.NEXT_PUBLIC_APPCHECK_KEY || '6LefuzUtAAAAAF5dhhhHqSzPYXZdsvkGa3JSMn4R';
+if (typeof window !== 'undefined' && APPCHECK_SITE_KEY) {
+  try {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(APPCHECK_SITE_KEY),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch (e) {
+    // No romper la app si App Check falla al inicializar.
+    console.warn('App Check no se pudo inicializar:', e?.message || e);
+  }
+}
 
 // Firestore con caché local persistente → offline-first real (IndexedDB).
 export const db = initializeFirestore(app, {
