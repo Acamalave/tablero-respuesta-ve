@@ -9,6 +9,7 @@ export const ZONES = {
   sanfelipe: { name: 'San Felipe', sector: 'Yaracuy',          x: 24, y: 50, lat: 10.3399, lng: -68.7406 },
   yumare:    { name: 'Yumare',     sector: 'Yaracuy norte',    x: 34, y: 22, lat: 10.6126, lng: -68.6906 },
   valencia:  { name: 'Valencia',   sector: 'Carabobo',         x: 48, y: 60, lat: 10.1620, lng: -68.0077 },
+  falcon:    { name: 'Falcón',     sector: 'Coro y costa',     x: 14, y: 12, lat: 11.4045, lng: -69.6734 },
 };
 export const ZONE_KEYS = Object.keys(ZONES);
 
