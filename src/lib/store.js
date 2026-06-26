@@ -22,6 +22,7 @@ const REPORTS = collection(db, 'reports');
 const VOLS = collection(db, 'volunteers');
 const VISITS = collection(db, 'visits');           // personas únicas que ingresaron
 const SUGGESTIONS = collection(db, 'suggestions');  // sugerencias de usuarios al coordinador
+const ANNOUNCEMENTS = collection(db, 'announcements'); // tarjetas de información (difundir)
 const COORD_DOC = doc(db, 'config', 'coordinator');
 
 export const PAGE = 20; // tamaño de página del tablero
@@ -173,6 +174,21 @@ export async function fetchSuggestions(max = 60) {
   catch { return []; }
 }
 export const setSuggestionStatus = (id, status) => updateDoc(doc(SUGGESTIONS, id), { status }).catch(() => {});
+
+/* ----- Información para difundir (tarjetas del coordinador) ----- */
+export async function createAnnouncement(text) {
+  const ref = doc(ANNOUNCEMENTS);
+  await setDoc(ref, { text, created: Date.now(), active: true });
+  return ref.id;
+}
+export async function fetchAnnouncements(max = 20) {
+  try {
+    const s = await getDocs(query(ANNOUNCEMENTS, where('active', '==', true), limit(max)));
+    return s.docs.map(row).sort((a, b) => (b.created || 0) - (a.created || 0));
+  } catch { return []; }
+}
+// "Quitar" = ocultar (soft-delete) para no borrar de verdad.
+export const hideAnnouncement = (id) => updateDoc(doc(ANNOUNCEMENTS, id), { active: false }).catch(() => {});
 
 // Contacto del coordinador (editable) — mostrado a los voluntarios.
 export async function fetchCoordContact() {

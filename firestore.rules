@@ -116,6 +116,18 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ───────────────────────── announcements (información para difundir) ─────────────────────────
+    match /announcements/{id} {
+      allow read:   if true;
+      allow create: if request.resource.data.keys().hasOnly(['text','created','active'])
+        && request.resource.data.text is string && request.resource.data.text.size() >= 1 && request.resource.data.text.size() <= 800
+        && request.resource.data.created is int
+        && request.resource.data.active == true;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active'])
+        && request.resource.data.active is bool;
+      allow delete: if false;
+    }
+
     // ───────────────────────── config (contacto del coordinador) ─────────────────────────
     match /config/{id} {
       allow read:  if true;

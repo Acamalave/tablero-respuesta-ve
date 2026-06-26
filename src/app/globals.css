@@ -544,6 +544,17 @@ button.vcard:active { transform: scale(.99); }
 .examples .ex-cta { text-align: center; font-size: 13px; color: var(--ink-soft); margin-top: 18px; }
 .examples .ex-cta b { color: var(--ve-blue); }
 
+/* Tarjetas de INFORMACIÓN (difundir) — tono azul lleno, resaltan entre las tareas */
+.info-stack { display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
+.info-card { position: relative; overflow: hidden; background: linear-gradient(135deg, #0a47a6 0%, #1559cc 100%); color: #fff; border-radius: var(--radius-sm); padding: 16px 18px; box-shadow: 0 12px 26px -12px rgba(10,71,166,.55); }
+.info-card::before { content: '📢'; position: absolute; right: -8px; bottom: -16px; font-size: 84px; opacity: .12; pointer-events: none; }
+.info-card .info-head { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.info-card .info-tag { font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: #bcd4f7; }
+.info-card .info-x { flex-shrink: 0; width: 26px; height: 26px; border-radius: 8px; border: 0; background: rgba(255,255,255,.16); color: #fff; font-weight: 800; font-size: 13px; cursor: pointer; line-height: 1; }
+.info-card .info-x:hover { background: rgba(255,255,255,.3); }
+.info-card .info-text { position: relative; font-size: 15px; line-height: 1.5; font-weight: 500; color: #fff; margin-bottom: 14px; }
+.info-card .btn-wa { position: relative; }
+
 /* ===================== Mapa grande (coordinador) ===================== */
 .mapwrap { overflow: hidden; }
 .region-map { width: 100%; display: block; background: var(--surface-2); }
