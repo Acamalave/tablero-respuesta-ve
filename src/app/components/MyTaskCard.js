@@ -1,7 +1,7 @@
 'use client';
 /* "Mis tareas" — tarea ya tomada por el voluntario, con sus FASES
    (Tomada → En curso → Completada) y acciones, incluida "No pude terminarla". */
-import { PRIOS, SKILLS, ago } from '@/lib/model';
+import { PRIOS, SKILLS, ago, COORD_NAME, COORD_PHONE } from '@/lib/model';
 import TaskMiniMap from './TaskMiniMap';
 
 // Normaliza un teléfono venezolano a formato internacional para tel:/WhatsApp.
@@ -15,14 +15,17 @@ function intlNumber(phone) {
 }
 
 // Mensaje predeterminado de WhatsApp: el voluntario se anuncia con su nombre
-// y lo que va a hacer (la tarea), poniéndose en contacto con quien reportó.
-function waText(t, mine) {
+// y lo que va a hacer (la tarea), poniéndose en contacto.
+function waText(t, mine, isReporter) {
   const yo = (mine && mine.name) || 'un voluntario';
-  const a = t.reporterName ? `Hola ${t.reporterName}, ` : 'Hola, ';
-  const msg = `${a}soy ${yo}, voluntario de Tarea: Venezuela. ` +
-    `Tomé tu reporte y voy a ayudar con: "${t.title}"${t.loc ? ` (${t.loc})` : ''}. ` +
-    `Me pongo en contacto contigo para coordinar.`;
-  return encodeURIComponent(msg);
+  const lugar = t.loc ? ` (${t.loc})` : '';
+  if (isReporter) {
+    const a = t.reporterName ? `Hola ${t.reporterName}, ` : 'Hola, ';
+    return encodeURIComponent(`${a}soy ${yo}, voluntario de Tarea: Venezuela. ` +
+      `Tomé tu reporte y voy a ayudar con: "${t.title}"${lugar}. Me pongo en contacto contigo para coordinar.`);
+  }
+  return encodeURIComponent(`Hola, soy ${yo}, voluntario de Tarea: Venezuela. ` +
+    `Tomé la tarea "${t.title}"${lugar} y me pongo en contacto para coordinar.`);
 }
 
 const PRIO_HEX = { alta: '#e11d48', media: '#d97706', baja: '#0d9a6c' };
@@ -71,17 +74,23 @@ export default function MyTaskCard({ t, mine, online, contact, h, i = 0 }) {
 
         {sk && <div className="meta" style={{ marginTop: 6 }}><div className="row"><span className="mi">🛠️</span><span className="skill">{sk.icon} {sk.label}</span></div></div>}
 
-        {t.reporterPhone ? (
-          <div className="contact-box">
-            <div className="contact-who">📣 Reportado por <b>{t.reporterName || 'un ciudadano'}</b> · ponte en contacto:</div>
-            <div className="contact-actions">
-              <a className="btn btn-primary btn-sm" href={`tel:+${intlNumber(t.reporterPhone)}`}>📞 Llamar</a>
-              <a className="btn btn-wa btn-sm" href={`https://wa.me/${intlNumber(t.reporterPhone)}?text=${waText(t, mine)}`} target="_blank" rel="noopener noreferrer">💬 WhatsApp</a>
+        {(() => {
+          const isReporter = !!t.reporterPhone;
+          const num = intlNumber(isReporter ? t.reporterPhone : COORD_PHONE);
+          return (
+            <div className="contact-box">
+              <div className="contact-who">
+                {isReporter
+                  ? <>📣 Reportado por <b>{t.reporterName || 'un ciudadano'}</b> · ponte en contacto:</>
+                  : <>📞 Contacto del <b>{COORD_NAME}</b> · coordina la tarea:</>}
+              </div>
+              <div className="contact-actions">
+                <a className="btn btn-primary btn-sm" href={`tel:+${num}`}>📞 Llamar</a>
+                <a className="btn btn-wa btn-sm" href={`https://wa.me/${num}?text=${waText(t, mine, isReporter)}`} target="_blank" rel="noopener noreferrer">💬 WhatsApp</a>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="contact"><span>💬</span>{contact}</div>
-        )}
+          );
+        })()}
 
         {!online && <div className="pend"><span className="state-badge state-pendiente"><span className="led" />Pendiente de sincronizar</span></div>}
 
