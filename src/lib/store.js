@@ -123,7 +123,7 @@ export async function fetchMyReports(uid) {
   return snap.docs.map(row);
 }
 export async function fetchVolunteers() {
-  const snap = await getDocs(query(VOLS, limit(60)));
+  const snap = await getDocs(query(VOLS, limit(200)));
   return snap.docs.map(row);
 }
 export async function fetchUser(uid) {

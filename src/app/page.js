@@ -618,12 +618,15 @@ function AnnounceModal({ onClose, onSave }) {
 // Vista previa del perfil de una persona (coordinador): info + historial + editar.
 function VolunteerDetail({ vol, onClose, onSave }) {
   const [tasks, setTasks] = useState(null); // null = cargando
+  const [reports, setReports] = useState(null);
   const [editing, setEditing] = useState(false);
   useEffect(() => {
     let live = true;
     store.fetchVolunteerTasks(vol.uid).then((t) => { if (live) setTasks(t); }).catch(() => { if (live) setTasks([]); });
+    store.fetchMyReports(vol.uid).then((r) => { if (live) setReports(r); }).catch(() => { if (live) setReports([]); });
     return () => { live = false; };
   }, [vol.uid]);
+  const REP_LBL = { pendiente: 'Pendiente', convertido: 'Convertido en tarea', descartado: 'Descartado' };
 
   if (editing) {
     return <EditProfileModal user={vol} title={`Editar a ${vol.name}`} onClose={() => setEditing(false)}
@@ -661,6 +664,19 @@ function VolunteerDetail({ vol, onClose, onSave }) {
                   </div>
                 );
               })}</div>}
+
+        <div className="vd-section">Reportes hechos</div>
+        {reports === null
+          ? <div className="vd-empty">Cargando…</div>
+          : reports.length === 0
+            ? <div className="vd-empty">No ha hecho reportes.</div>
+            : <div className="vd-tasks">{reports.map((r) => (
+                <div className="vd-task" key={r.id}>
+                  <span className="vd-badge st-reporte">📢 {REP_LBL[r.status] || r.status}</span>
+                  <div className="vd-tinfo"><b>{r.need}</b><span>📍 {r.loc} · {ago(r.created)}</span></div>
+                </div>
+              ))}</div>}
+
         <div className="actions">
           <button className="btn btn-ghost" onClick={onClose}>Cerrar</button>
           <button className="btn btn-take" onClick={() => setEditing(true)}>✏️ Editar información</button>
@@ -1082,24 +1098,45 @@ function CoordBoard({ tasks, h, boardMore, loadMore, announcements, isAdmin, onR
 }
 
 function Roster({ volunteers, onOpen }) {
+  const [q, setQ] = useState('');
+  const [shown, setShown] = useState(20);
+  const norm = (s) => (s || '').toLowerCase();
+  const query = norm(q.trim());
+  const digits = (s) => (s || '').replace(/\D/g, '');
+  const filtered = query
+    ? volunteers.filter((v) => norm(v.name).includes(query) || (digits(v.cedula).includes(digits(query)) && digits(query)))
+    : volunteers;
+  const list = filtered.slice(0, shown);
   return (
     <div>
-      <div className="roster-head">👥 <b>{volunteers.length}</b> personas registradas. Toca a una para ver su perfil y editarlo.</div>
-      {!volunteers.length
-        ? <Empty title="Sin personas aún" sub="Aparecerán al registrarse." />
-        : <div className="roster">
-            {volunteers.map((v) => (
-              <button className="panel vcard" key={v.id} onClick={() => onOpen({ ...v, uid: v.id })}>
-                <div className="av">{avatarFor(v.name)}</div>
-                <div className="vinfo">
-                  <div className="vn">{v.name} <span className="arr">›</span></div>
-                  <div className="vt">📍 {ZONES[v.zone]?.name || '—'}{v.cedula ? ` · 🪪 ${v.cedula}` : ''}</div>
-                  <div className="vsk">{(v.skills || []).map((s) => <i key={s} title={SKILLS[s]?.label || s}>{SKILLS[s]?.icon || '✨'}</i>)}</div>
-                </div>
-                <div className="vct"><b>{v.done ?? 0}</b><span>ayudas</span></div>
+      <div className="roster-bar">
+        <span className="rs-ic">🔎</span>
+        <input className="input roster-search" value={q} placeholder="Buscar por nombre o cédula…"
+          onChange={(e) => { setQ(e.target.value); setShown(20); }} />
+        {q && <button className="rs-clear" onClick={() => setQ('')} aria-label="Limpiar">✕</button>}
+      </div>
+      <div className="roster-head">👥 <b>{filtered.length}</b> {query ? 'encontradas' : 'personas registradas'}. Toca a una para ver su perfil.</div>
+      {!filtered.length
+        ? <Empty title={query ? 'Sin resultados' : 'Sin personas aún'} sub={query ? 'Prueba con otro nombre o cédula.' : 'Aparecerán al registrarse.'} />
+        : <div className="roster-list">
+            {list.map((v) => (
+              <button className="rrow" key={v.id} onClick={() => onOpen({ ...v, uid: v.id })}>
+                <span className="rav">{avatarFor(v.name)}</span>
+                <span className="rmain">
+                  <b>{v.name}</b>
+                  <span className="rmeta">📍 {ZONES[v.zone]?.name || '—'}{v.cedula ? ` · ${v.cedula}` : ''}</span>
+                </span>
+                <span className="rsk">{(v.skills || []).slice(0, 5).map((s) => <i key={s} title={SKILLS[s]?.label || s}>{SKILLS[s]?.icon || '✨'}</i>)}</span>
+                <span className="rct"><b>{v.done ?? 0}</b> ayudas</span>
+                <span className="rarr">›</span>
               </button>
             ))}
           </div>}
+      {filtered.length > shown && (
+        <div style={{ textAlign: 'center', marginTop: 14 }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => setShown((s) => s + 20)}>Cargar más ({filtered.length - shown})</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1198,7 +1235,7 @@ function InfoList({ announcements, isAdmin, onRemove }) {
   );
 }
 function InfoCard({ a, isAdmin, onRemove }) {
-  const wa = `https://wa.me/?text=${encodeURIComponent(a.text)}`;
+  const wa = `https://wa.me/?text=${encodeURIComponent(`${a.text}\n\n📲 Súmate y ayuda en Tarea: Venezuela → https://tareavenezuela.com`)}`;
   return (
     <div className="info-card">
       <div className="info-head">

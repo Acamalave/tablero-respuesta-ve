@@ -18,13 +18,14 @@ function intlNumber(phone) {
 function waText(t, mine, isReporter) {
   const yo = (mine && mine.name) || 'un voluntario';
   const lugar = t.loc ? ` (${t.loc})` : '';
+  const firma = '\n\nTarea: Venezuela · https://tareavenezuela.com';
   if (isReporter) {
     const a = t.reporterName ? `Hola ${t.reporterName}, ` : 'Hola, ';
     return encodeURIComponent(`${a}soy ${yo}, voluntario de Tarea: Venezuela. ` +
-      `Tomé tu reporte y voy a ayudar con: "${t.title}"${lugar}. Me pongo en contacto contigo para coordinar.`);
+      `Tomé tu reporte y voy a ayudar con: "${t.title}"${lugar}. Me pongo en contacto contigo para coordinar.` + firma);
   }
   return encodeURIComponent(`Hola, soy ${yo}, voluntario de Tarea: Venezuela. ` +
-    `Tomé la tarea "${t.title}"${lugar} y me pongo en contacto para coordinar.`);
+    `Tomé la tarea "${t.title}"${lugar} y me pongo en contacto para coordinar.` + firma);
 }
 
 const PHASES = [
