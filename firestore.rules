@@ -95,6 +95,27 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ───────────────────────── visits (personas únicas que ingresan) ─────────────────────────
+    match /visits/{id} {
+      allow read:   if true;
+      allow write:  if request.resource.data.keys().hasOnly(['firstSeen']) && request.resource.data.firstSeen is int;
+      allow delete: if false;
+    }
+
+    // ───────────────────────── suggestions (usuario → coordinador) ─────────────────────────
+    match /suggestions/{id} {
+      allow read:   if true;
+      allow create: if request.resource.data.keys().hasOnly(['text','name','uid','created','status'])
+        && request.resource.data.text is string && request.resource.data.text.size() >= 1 && request.resource.data.text.size() <= 1000
+        && ostr(request.resource.data,'name',120)
+        && (request.resource.data.uid == null || (request.resource.data.uid is string && request.resource.data.uid.size() <= 60))
+        && request.resource.data.created is int
+        && request.resource.data.status == 'nueva';
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in ['nueva','leida','atendida'];
+      allow delete: if false;
+    }
+
     // ───────────────────────── config (contacto del coordinador) ─────────────────────────
     match /config/{id} {
       allow read:  if true;

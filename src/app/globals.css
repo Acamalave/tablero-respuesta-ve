@@ -479,6 +479,69 @@ textarea.input { resize: vertical; min-height: 84px; }
 .vcard .vct b { font-family: var(--font-display); font-size: 20px; font-weight: 900; color: var(--ve-blue); }
 .vcard .vct span { font-size: 9.5px; font-weight: 600; color: var(--ink-faint); }
 
+/* Roster clicable + resumen de personas/visitas */
+.roster-head { font-size: 12.5px; color: var(--ink-faint); margin-bottom: 14px; line-height: 1.5; }
+.roster-head b { color: var(--ink-soft); }
+button.vcard { font: inherit; color: inherit; text-align: left; cursor: pointer; width: 100%; transition: border-color .18s var(--ease), transform .1s var(--ease); }
+button.vcard:hover { border-color: var(--ve-blue); }
+button.vcard:active { transform: scale(.99); }
+.vcard .vinfo { min-width: 0; }
+.vcard .vn .arr { color: var(--ink-faint); font-weight: 800; }
+
+/* Historial de visitas */
+.visits { display: flex; flex-direction: column; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.visit-row { display: flex; align-items: center; gap: 11px; padding: 12px 15px; background: var(--surface); }
+.visit-row.reg { cursor: pointer; }
+.visit-row.reg:hover { background: var(--surface-2); }
+.visit-row .vdot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-faint); flex-shrink: 0; }
+.visit-row.reg .vdot { background: var(--p-baja); }
+.visit-row .vmain { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.visit-row .vmain b { font-size: 14px; }
+.visit-row .vmain span { font-size: 12px; color: var(--ink-faint); }
+.visit-row .vmain .arr { color: var(--ve-blue); font-weight: 800; }
+.visit-row .vtime { font-size: 11.5px; color: var(--ink-faint); white-space: nowrap; }
+
+/* Sugerencias (coordinador) */
+.sugg-list { display: flex; flex-direction: column; gap: 12px; }
+.sugg-item { display: flex; gap: 13px; padding: 15px 16px; align-items: flex-start; }
+.sugg-item.nueva { border-color: var(--ve-blue); box-shadow: 0 0 0 1px var(--ve-blue) inset, var(--shadow-sm); }
+.sugg-item .sugg-ic { font-size: 20px; flex-shrink: 0; }
+.sugg-item .sugg-c { flex: 1; min-width: 0; }
+.sugg-item .sugg-c p { font-size: 14px; line-height: 1.5; color: var(--ink); }
+.sugg-item .sugg-meta { font-size: 11.5px; color: var(--ink-faint); margin-top: 6px; }
+.sugg-item .btn { flex-shrink: 0; }
+
+/* Enviar sugerencia (perfil de usuario) */
+.suggest-cta { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 26px; padding-top: 18px; border-top: 1px dashed var(--border); font-size: 13px; color: var(--ink-faint); }
+
+/* Vista previa de perfil (coordinador) */
+.vd-head { display: flex; gap: 13px; align-items: center; margin-bottom: 14px; }
+.vd-head .vd-av { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; font-size: 22px; background: var(--surface-2); border: 1px solid var(--border); flex-shrink: 0; }
+.vd-head h3 { font-size: 20px; }
+.vd-stats { display: flex; gap: 10px; margin-bottom: 14px; }
+.vd-stats .ps { flex: 1; }
+.vd-skills { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 16px; }
+.vd-skills .chip { cursor: default; font-size: 12.5px; padding: 7px 11px; }
+.vd-section { font-family: var(--font-display); font-weight: 800; font-size: 14px; margin: 6px 0 10px; color: var(--ink); }
+.vd-empty { font-size: 13px; color: var(--ink-faint); padding: 6px 0 4px; }
+.vd-tasks { display: flex; flex-direction: column; gap: 9px; }
+.vd-task { display: flex; gap: 11px; align-items: flex-start; padding: 11px 13px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+.vd-task .vd-tinfo { min-width: 0; }
+.vd-task .vd-tinfo b { font-size: 13.5px; display: block; }
+.vd-task .vd-tinfo span { font-size: 12px; color: var(--ink-faint); }
+.vd-badge { font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; flex-shrink: 0; }
+.vd-badge.st-completada { color: var(--p-baja); background: var(--p-baja-bg); }
+.vd-badge.st-curso { color: var(--p-media); background: var(--p-media-bg); }
+.vd-badge.st-tomada, .vd-badge.st-abierta { color: var(--ve-blue); background: #eaf1fd; }
+
+/* Ejemplos en el tablero vacío */
+.examples .ex-note { font-size: 13px; line-height: 1.55; color: var(--ink-soft); background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px; padding: 13px 15px; margin-bottom: 16px; }
+.examples .ex-note b { color: var(--ink); }
+.task.example { position: relative; opacity: .9; }
+.task.example .ex-tag { position: absolute; top: 11px; right: 13px; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; z-index: 1; }
+.examples .ex-cta { text-align: center; font-size: 13px; color: var(--ink-soft); margin-top: 18px; }
+.examples .ex-cta b { color: var(--ve-blue); }
+
 /* ===================== Mapa grande (coordinador) ===================== */
 .mapwrap { overflow: hidden; }
 .region-map { width: 100%; display: block; background: var(--surface-2); }

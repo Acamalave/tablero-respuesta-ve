@@ -20,6 +20,8 @@ import {
 const TASKS = collection(db, 'tasks');
 const REPORTS = collection(db, 'reports');
 const VOLS = collection(db, 'volunteers');
+const VISITS = collection(db, 'visits');           // personas únicas que ingresaron
+const SUGGESTIONS = collection(db, 'suggestions');  // sugerencias de usuarios al coordinador
 const COORD_DOC = doc(db, 'config', 'coordinator');
 
 export const PAGE = 20; // tamaño de página del tablero
@@ -118,6 +120,44 @@ export async function fetchUser(uid) {
 export async function fetchHelpersCount() {
   try { return (await getCountFromServer(VOLS)).data().count; } catch { return 0; }
 }
+
+// Historial de tareas de UN voluntario (para la vista previa del coordinador).
+export async function fetchVolunteerTasks(uid) {
+  if (!uid) return [];
+  try {
+    const snap = await getDocs(query(TASKS, where('takerUids', 'array-contains', uid), limit(25)));
+    return snap.docs.map(row).sort((a, b) => (b.created || 0) - (a.created || 0));
+  } catch { return []; }
+}
+
+/* ----- Visitas (personas únicas que ingresaron) ----- */
+// Se registra UNA vez por navegador (gated por localStorage en el cliente).
+export async function recordVisit(uid) {
+  if (!uid) return;
+  try { await setDoc(doc(VISITS, uid), { firstSeen: Date.now() }); } catch {}
+}
+export async function fetchVisits(max = 100) {
+  try { const s = await getDocs(query(VISITS, orderBy('firstSeen', 'desc'), limit(max))); return s.docs.map(row); }
+  catch { return []; }
+}
+export async function fetchVisitsCount() {
+  try { return (await getCountFromServer(VISITS)).data().count; } catch { return 0; }
+}
+
+/* ----- Sugerencias (usuario → coordinador) ----- */
+export async function createSuggestion(data) {
+  const ref = doc(SUGGESTIONS);
+  await setDoc(ref, {
+    text: data.text, name: data.name || '', uid: data.uid || null,
+    created: Date.now(), status: 'nueva',
+  });
+  return ref.id;
+}
+export async function fetchSuggestions(max = 60) {
+  try { const s = await getDocs(query(SUGGESTIONS, orderBy('created', 'desc'), limit(max))); return s.docs.map(row); }
+  catch { return []; }
+}
+export const setSuggestionStatus = (id, status) => updateDoc(doc(SUGGESTIONS, id), { status }).catch(() => {});
 
 // Contacto del coordinador (editable) — mostrado a los voluntarios.
 export async function fetchCoordContact() {

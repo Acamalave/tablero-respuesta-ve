@@ -21,6 +21,7 @@ const ADMIN_KEY = 'tablero_admin_v1';
 const MODE_KEY = 'tablero_mode_v1';   // 'voluntario' | 'reportante'
 const VIEW_KEY = 'tablero_view_v1';   // 'usuario' | 'coordinador' (última pantalla)
 const WELCOME_KEY = 'tablero_welcome_v1'; // bienvenida mostrada (solo la primera vez)
+const VISIT_KEY = 'tablero_visit_v1';     // ya se registró la visita única
 // Código de acceso del coordinador (solo la organización). Cámbialo aquí.
 const ADMIN_CODE = 'acacio';
 
@@ -50,6 +51,11 @@ export default function Page() {
   const [reports, setReports] = useState([]);      // reportes pendientes (coordinador)
   const [myReports, setMyReports] = useState([]);  // reportes del usuario
   const [volunteers, setVolunteers] = useState([]);
+  const [suggestions, setSuggestions] = useState([]); // sugerencias (coordinador)
+  const [visits, setVisits] = useState([]);           // historial de visitas (coordinador)
+  const [visitsCount, setVisitsCount] = useState(0);  // total personas únicas
+  const [suggestModal, setSuggestModal] = useState(false); // usuario: enviar sugerencia
+  const [detailVol, setDetailVol] = useState(null);   // coordinador: perfil en vista previa
   const [stats, setStats] = useState({ abiertas: 0, encurso: 0, completadas: 0, pend: 0 });
   const [me, setMe] = useState({});                // perfil propio (contadores)
   const [refreshing, setRefreshing] = useState(false);
@@ -85,6 +91,7 @@ export default function Page() {
       if (SEED_ENABLED) { try { await store.seedIfEmpty(); } catch {} }
       try { const c = await store.fetchCoordContact(); if (c && c.phone) setCoord(c); } catch {}
       try { const n = await store.fetchHelpersCount(); setHelpers(n); } catch {}
+      try { if (!localStorage.getItem(VISIT_KEY)) { await store.recordVisit(myUid); localStorage.setItem(VISIT_KEY, '1'); } } catch {}
       try {
         const saved = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
         const admin = localStorage.getItem(ADMIN_KEY) === '1';
@@ -121,7 +128,9 @@ export default function Page() {
         const [board, st] = await Promise.all([store.fetchBoard(), store.fetchStats()]);
         setTasks(board.rows); setBoardLast(board.last); setBoardMore(board.more); setStats(st);
         if (coordTab === 'reportes') setReports(await store.fetchPendingReports());
-        else if (coordTab === 'voluntarios') setVolunteers(await store.fetchVolunteers());
+        else if (coordTab === 'voluntarios') { setVolunteers(await store.fetchVolunteers()); setVisitsCount(await store.fetchVisitsCount()); }
+        else if (coordTab === 'sugerencias') setSuggestions(await store.fetchSuggestions());
+        else if (coordTab === 'visitas') { setVisits(await store.fetchVisits()); setVisitsCount(await store.fetchVisitsCount()); }
       } else if (role === 'usuario' && uid) {
         const meDoc = await store.fetchUser(uid); if (meDoc) setMe(meDoc);
         if (mode === 'voluntario') {
@@ -214,6 +223,21 @@ export default function Page() {
     pushToast('Contacto actualizado', 'El contacto del coordinador se guardó.', '✅', 'Coordinador');
   };
 
+  // Usuario envía una sugerencia al coordinador
+  const sendSuggestion = async (text) => {
+    await store.createSuggestion({ text, name: user?.name || '', uid });
+    setSuggestModal(false);
+    pushToast('¡Gracias por tu sugerencia!', 'La coordinación la revisará para mejorar la app.', '💡', 'Enviado');
+  };
+
+  // Coordinador edita el perfil de OTRA persona (desde la vista previa)
+  const saveVolunteerAdmin = async (profile, targetUid) => {
+    await store.upsertVolunteer({ ...profile, uid: targetUid });
+    setDetailVol((d) => (d ? { ...d, ...profile } : d));
+    setVolunteers((vs) => vs.map((v) => (v.id === targetUid ? { ...v, ...profile } : v)));
+    pushToast('Perfil actualizado', 'Los datos de la persona se guardaron.', '✅', 'Coordinador');
+  };
+
   return (
     <div className="app">
       <header className="topbar">
@@ -247,9 +271,9 @@ export default function Page() {
             onCoordinator={() => { if (isAdmin) { setRole('coordinador'); setCoordTab('tablero'); } else setAdminGate(true); }}
           />
         ) : role === 'coordinador' ? (
-          <Coordinador {...{ tasks, reports, volunteers, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, onEditCoord: () => setEditCoord(true), openCreate: (p) => setModal({ prefill: p || null }), onConvert: (r) => setModal({ prefill: r }), onDiscard: async (id) => { await store.setReportStatus(id, 'descartado'); refresh(); } }} />
+          <Coordinador {...{ tasks, reports, volunteers, suggestions, visits, visitsCount, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, onEditCoord: () => setEditCoord(true), onOpenVol: setDetailVol, onSuggestStatus: async (id, st) => { await store.setSuggestionStatus(id, st); setSuggestions((s) => s.map((x) => (x.id === id ? { ...x, status: st } : x))); }, openCreate: (p) => setModal({ prefill: p || null }), onConvert: (r) => setModal({ prefill: r }), onDiscard: async (id) => { await store.setReportStatus(id, 'descartado'); refresh(); } }} />
         ) : user ? (
-          <Usuario {...{ user: { ...user, uid }, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, uid, online, volView, setVolView, h, coord, onEditProfile: () => setEditProfile(true), onSendReport: sendReport, userPos, geoState, requestGeo }} />
+          <Usuario {...{ user: { ...user, uid }, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, uid, online, volView, setVolView, h, coord, onEditProfile: () => setEditProfile(true), onSuggest: () => setSuggestModal(true), onSendReport: sendReport, userPos, geoState, requestGeo }} />
         ) : (
           <Registro initialMode={mode} onDone={register} />
         )}
@@ -269,6 +293,8 @@ export default function Page() {
       {showWelcome && <WelcomeModal onClose={() => { try { localStorage.setItem(WELCOME_KEY, '1'); } catch {} setShowWelcome(false); }} />}
       {editProfile && user && <EditProfileModal user={user} onClose={() => setEditProfile(false)} onSave={saveProfile} />}
       {editCoord && <CoordContactModal coord={coord} onClose={() => setEditCoord(false)} onSave={saveCoord} />}
+      {suggestModal && <SuggestionModal onClose={() => setSuggestModal(false)} onSend={sendSuggestion} />}
+      {detailVol && <VolunteerDetail vol={detailVol} onClose={() => setDetailVol(null)} onSave={saveVolunteerAdmin} />}
 
       {adminGate && <AdminGate onClose={() => setAdminGate(false)} onOk={() => {
         try { localStorage.setItem(ADMIN_KEY, '1'); } catch {}
@@ -425,7 +451,7 @@ function SkillsPicker({ skills, setSkills }) {
 /* ====================================================================
    EDITAR PERFIL — el usuario cambia su contacto y lo que ofrece
    ==================================================================== */
-function EditProfileModal({ user, onClose, onSave }) {
+function EditProfileModal({ user, onClose, onSave, title = 'Editar mis datos' }) {
   const [name, setName] = useState(user.name || '');
   const [phone, setPhone] = useState(user.phone || '');
   const [cedula, setCedula] = useState(user.cedula || '');
@@ -445,8 +471,8 @@ function EditProfileModal({ user, onClose, onSave }) {
   return (
     <div className="modal-bg show" onClick={(e) => { if (e.target.classList.contains('modal-bg')) onClose(); }}>
       <div className="modal modal-scroll" style={{ maxWidth: 560 }}>
-        <h3>Editar mis datos</h3>
-        <div className="sub">Actualiza tu contacto y lo que puedes ofrecer.</div>
+        <h3>{title}</h3>
+        <div className="sub">Actualiza el contacto y lo que la persona puede ofrecer.</div>
         <div className="field">
           <label>Nombre y apellido</label>
           <input className={`input ${touched && !nameOk ? 'invalid' : ''}`} value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Carlos Rodríguez" />
@@ -507,6 +533,84 @@ function CoordContactModal({ coord, onClose, onSave }) {
         <div className="actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
           <button className="btn btn-primary" onClick={submit} disabled={!valid}>Guardar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Usuario envía una sugerencia para mejorar la app.
+function SuggestionModal({ onClose, onSend }) {
+  const [text, setText] = useState('');
+  const ok = text.trim().length >= 4;
+  return (
+    <div className="modal-bg show" onClick={(e) => { if (e.target.classList.contains('modal-bg')) onClose(); }}>
+      <div className="modal" style={{ maxWidth: 460 }}>
+        <h3>💡 Enviar sugerencia</h3>
+        <div className="sub">¿Cómo podemos mejorar la app? Tu idea llega directo a la coordinación.</div>
+        <div className="field">
+          <label>Tu sugerencia</label>
+          <textarea className="input" rows={4} value={text} maxLength={1000} autoFocus
+            onChange={(e) => setText(e.target.value)} placeholder="Escribe tu idea o lo que mejorarías…" />
+        </div>
+        <div className="actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-take" disabled={!ok} onClick={() => onSend(text.trim())}>Enviar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Vista previa del perfil de una persona (coordinador): info + historial + editar.
+function VolunteerDetail({ vol, onClose, onSave }) {
+  const [tasks, setTasks] = useState(null); // null = cargando
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    let live = true;
+    store.fetchVolunteerTasks(vol.uid).then((t) => { if (live) setTasks(t); }).catch(() => { if (live) setTasks([]); });
+    return () => { live = false; };
+  }, [vol.uid]);
+
+  if (editing) {
+    return <EditProfileModal user={vol} title={`Editar a ${vol.name}`} onClose={() => setEditing(false)}
+      onSave={async (p) => { await onSave(p, vol.uid); setEditing(false); }} />;
+  }
+  return (
+    <div className="modal-bg show" onClick={(e) => { if (e.target.classList.contains('modal-bg')) onClose(); }}>
+      <div className="modal modal-scroll" style={{ maxWidth: 520 }}>
+        <div className="vd-head">
+          <div className="vd-av">{avatarFor(vol.name)}</div>
+          <div><h3>{vol.name}</h3><div className="sub">📍 {ZONES[vol.zone]?.name || '—'} &nbsp;·&nbsp; 📞 {vol.phone || '—'} &nbsp;·&nbsp; 🪪 {vol.cedula || '—'}</div></div>
+        </div>
+        <div className="vd-stats">
+          <div className="ps help"><b>{vol.done ?? 0}</b><span>Ayudas</span></div>
+          <div className="ps rep"><b>{vol.reports ?? 0}</b><span>Reportes</span></div>
+        </div>
+        {(vol.skills || []).length > 0 && (
+          <div className="vd-skills">{(vol.skills || []).map((s) => (
+            <span className="chip on" key={s}><span>{SKILLS[s]?.icon || '✨'}</span>{SKILLS[s]?.label || s}</span>
+          ))}</div>
+        )}
+        <div className="vd-section">Historial de tareas</div>
+        {tasks === null
+          ? <div className="vd-empty">Cargando…</div>
+          : tasks.length === 0
+            ? <div className="vd-empty">Aún no ha tomado tareas.</div>
+            : <div className="vd-tasks">{tasks.map((t) => {
+                const mine = (t.takenBy || []).find((x) => x.uid === vol.uid);
+                const st = mine?.state || taskState(t);
+                const lbl = { tomada: 'Tomada', curso: 'En curso', completada: 'Completada' }[st] || st;
+                return (
+                  <div className="vd-task" key={t.id}>
+                    <span className={`vd-badge st-${st}`}>{lbl}</span>
+                    <div className="vd-tinfo"><b>{t.title}</b><span>📍 {t.loc} · {ago(t.created)}</span></div>
+                  </div>
+                );
+              })}</div>}
+        <div className="actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cerrar</button>
+          <button className="btn btn-take" onClick={() => setEditing(true)}>✏️ Editar información</button>
         </div>
       </div>
     </div>
@@ -579,7 +683,7 @@ function Registro({ initialMode, onDone }) {
 /* ====================================================================
    USUARIO — perfil unificado con switch Ayudar / Reportar
    ==================================================================== */
-function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, online, volView, setVolView, h, coord, onEditProfile, onSendReport, userPos, geoState, requestGeo }) {
+function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, online, volView, setVolView, h, coord, onEditProfile, onSuggest, onSendReport, userPos, geoState, requestGeo }) {
   // El contador de "Ayudas" lleva a las tareas completadas.
   const verCompletadas = () => { setMode('voluntario'); setVolView('completadas'); };
   return (
@@ -604,6 +708,11 @@ function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boa
       {mode === 'voluntario'
         ? <VolunteerArea tasks={tasks} myTasks={myTasks} boardMore={boardMore} loadMore={loadMore} user={user} online={online} volView={volView} setVolView={setVolView} h={h} coord={coord} userPos={userPos} geoState={geoState} requestGeo={requestGeo} />
         : <ReportArea myReports={myReports} onSend={onSendReport} onSwitch={() => setMode('voluntario')} userPos={userPos} requestGeo={requestGeo} />}
+
+      <div className="suggest-cta">
+        <span>¿Una idea para mejorar la app?</span>
+        <button className="btn btn-ghost btn-sm" onClick={onSuggest}>💡 Enviar sugerencia</button>
+      </div>
     </section>
   );
 }
@@ -714,7 +823,7 @@ function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volV
         ? <div className="task-grid">{board.slice(0, shown).map((o, i) => (
             <TaskCard key={o.t.id} t={o.t} mode="vol" i={i} h={hVol} distanceLabel={o.km != null ? fmtKm(o.km) : null} onOpen={() => setOpenId(o.t.id)} />
           ))}</div>
-        : <Empty title="Todo cubierto" sub="No hay tareas abiertas ahora mismo. Te avisaremos cuando surja una cerca de ti." />}
+        : <ExampleBoard />}
       {board.length > 0 && (shown < board.length || boardMore) && (
         <div style={{ textAlign: 'center', marginTop: 16 }}>
           <button className="btn btn-ghost btn-sm" onClick={() => { setShown((s) => s + 5); if (shown + 5 >= board.length && boardMore) loadMore(); }}>
@@ -851,7 +960,8 @@ function ReportArea({ myReports, onSend, onSwitch, userPos, requestGeo }) {
 /* ====================================================================
    COORDINADOR
    ==================================================================== */
-function Coordinador({ tasks, reports, volunteers, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, onEditCoord, openCreate, onConvert, onDiscard }) {
+function Coordinador({ tasks, reports, volunteers, suggestions, visits, visitsCount, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, onEditCoord, onOpenVol, onSuggestStatus, openCreate, onConvert, onDiscard }) {
+  const newSugg = suggestions.filter((s) => s.status === 'nueva').length;
   return (
     <section className="view">
       <div className="section-head">
@@ -867,16 +977,20 @@ function Coordinador({ tasks, reports, volunteers, stats, boardMore, loadMore, c
         <Stat n={stats.pend} l="Por revisar" a="var(--ve-red)" />
       </div>
       <div className="subtabs">
-        {[['tablero', '🗂️ Tablero'], ['voluntarios', '👥 Personas'], ['mapa', '🗺️ Mapa'], ['reportes', '📥 Reportes']].map(([k, lbl]) => (
+        {[['tablero', '🗂️ Tablero'], ['voluntarios', '👥 Personas'], ['visitas', '👁️ Visitas'], ['reportes', '📥 Reportes'], ['sugerencias', '💡 Sugerencias'], ['mapa', '🗺️ Mapa']].map(([k, lbl]) => (
           <button key={k} className={coordTab === k ? 'active' : ''} onClick={() => setCoordTab(k)}>
-            {lbl}{k === 'reportes' && <span className="count">{stats.pend}</span>}
+            {lbl}
+            {k === 'reportes' && stats.pend > 0 && <span className="count">{stats.pend}</span>}
+            {k === 'sugerencias' && newSugg > 0 && <span className="count">{newSugg}</span>}
           </button>
         ))}
       </div>
       {coordTab === 'tablero' && <CoordBoard tasks={tasks} h={h} boardMore={boardMore} loadMore={loadMore} />}
-      {coordTab === 'voluntarios' && <Roster volunteers={volunteers} />}
+      {coordTab === 'voluntarios' && <Roster volunteers={volunteers} visitsCount={visitsCount} onOpen={onOpenVol} />}
+      {coordTab === 'visitas' && <VisitsLog visits={visits} count={visitsCount} volunteers={volunteers} onOpen={onOpenVol} />}
       {coordTab === 'mapa' && <TacticalMap tasks={tasks} />}
       {coordTab === 'reportes' && <Inbox reports={reports} onConvert={onConvert} onDiscard={onDiscard} />}
+      {coordTab === 'sugerencias' && <SuggestionsList suggestions={suggestions} onStatus={onSuggestStatus} />}
     </section>
   );
 }
@@ -911,19 +1025,72 @@ function CoordBoard({ tasks, h, boardMore, loadMore }) {
   );
 }
 
-function Roster({ volunteers }) {
-  if (!volunteers.length) return <Empty title="Sin personas aún" sub="Aparecerán al registrarse." />;
+function Roster({ volunteers, visitsCount, onOpen }) {
   return (
-    <div className="roster">
-      {volunteers.map((v) => (
-        <div className="panel vcard" key={v.id}>
-          <div className="av">{avatarFor(v.name)}</div>
-          <div>
-            <div className="vn">{v.name}</div>
-            <div className="vt">📍 {ZONES[v.zone]?.name || '—'}{v.cedula ? ` · 🪪 ${v.cedula}` : ''}</div>
-            <div className="vsk">{(v.skills || []).map((s) => <i key={s} title={SKILLS[s]?.label || s}>{SKILLS[s]?.icon || '✨'}</i>)}</div>
+    <div>
+      <div className="roster-head">👥 <b>{volunteers.length}</b> registradas · 👁️ <b>{visitsCount}</b> han ingresado a la página. Toca a una persona para ver su perfil y editarlo.</div>
+      {!volunteers.length
+        ? <Empty title="Sin personas aún" sub="Aparecerán al registrarse." />
+        : <div className="roster">
+            {volunteers.map((v) => (
+              <button className="panel vcard" key={v.id} onClick={() => onOpen({ ...v, uid: v.id })}>
+                <div className="av">{avatarFor(v.name)}</div>
+                <div className="vinfo">
+                  <div className="vn">{v.name} <span className="arr">›</span></div>
+                  <div className="vt">📍 {ZONES[v.zone]?.name || '—'}{v.cedula ? ` · 🪪 ${v.cedula}` : ''}</div>
+                  <div className="vsk">{(v.skills || []).map((s) => <i key={s} title={SKILLS[s]?.label || s}>{SKILLS[s]?.icon || '✨'}</i>)}</div>
+                </div>
+                <div className="vct"><b>{v.done ?? 0}</b><span>ayudas</span></div>
+              </button>
+            ))}
+          </div>}
+    </div>
+  );
+}
+
+// Historial de personas únicas que han ingresado a la página.
+function VisitsLog({ visits, count, volunteers, onOpen }) {
+  const byUid = Object.fromEntries(volunteers.map((v) => [v.id, v]));
+  return (
+    <div>
+      <div className="roster-head">👁️ <b>{count}</b> personas únicas han ingresado a la página.</div>
+      {!visits.length
+        ? <Empty title="Aún sin visitas registradas" sub="Cada persona que entre aparecerá aquí una sola vez." />
+        : <div className="visits">
+            {visits.map((vi) => {
+              const reg = byUid[vi.id];
+              return (
+                <div className={`visit-row ${reg ? 'reg' : ''}`} key={vi.id} onClick={reg ? () => onOpen({ ...reg, uid: reg.id }) : undefined} role={reg ? 'button' : undefined}>
+                  <span className="vdot" />
+                  <div className="vmain">
+                    <b>{reg ? reg.name : 'Visitante'}</b>
+                    <span>{reg ? `Registrado · ${reg.done ?? 0} ayudas` : 'No registrado'}{reg && <span className="arr"> ›</span>}</span>
+                  </div>
+                  <span className="vtime">{ago(vi.firstSeen)}</span>
+                </div>
+              );
+            })}
+          </div>}
+    </div>
+  );
+}
+
+// Sugerencias enviadas por los usuarios.
+function SuggestionsList({ suggestions, onStatus }) {
+  const list = [...suggestions].sort((a, b) => (b.created || 0) - (a.created || 0));
+  if (!list.length) return <Empty title="Sin sugerencias aún" sub="Aquí verás las ideas que envíen los usuarios para mejorar la app." />;
+  return (
+    <div className="sugg-list">
+      {list.map((s) => (
+        <div className={`panel sugg-item ${s.status === 'nueva' ? 'nueva' : ''}`} key={s.id}>
+          <div className="sugg-ic">💡</div>
+          <div className="sugg-c">
+            <p>{s.text}</p>
+            <div className="sugg-meta">{s.name ? `${s.name} · ` : ''}{ago(s.created)}{s.status === 'atendida' ? ' · ✓ atendida' : ''}</div>
           </div>
-          <div className="vct"><b>{v.done ?? 0}</b><span>ayudas</span></div>
+          {s.status !== 'atendida'
+            ? <button className="btn btn-ghost btn-sm" onClick={() => onStatus(s.id, 'atendida')}>Marcar atendida</button>
+            : <button className="btn btn-ghost btn-sm" onClick={() => onStatus(s.id, 'nueva')}>Reabrir</button>}
         </div>
       ))}
     </div>
@@ -990,4 +1157,38 @@ function CreateModal({ prefill, onClose, onSave }) {
 
 function Empty({ title, sub }) {
   return <div className="panel empty"><div className="big">🗺️</div><div className="et">{title}</div>{sub}</div>;
+}
+
+// Ejemplos de necesidades (cuando aún no hay tareas reales) — orienta al usuario.
+const EXAMPLE_TASKS = [
+  { title: 'Repartir agua potable', loc: 'Refugio o sector sin servicio', prio: 'alta', skill: 'vehiculo' },
+  { title: 'Trasladar medicinas', loc: 'Farmacia → familia que lo necesita', prio: 'alta', skill: 'vehiculo' },
+  { title: 'Despejar escombros de una vía', loc: 'Calle o acceso bloqueado', prio: 'media', skill: 'fuerza' },
+  { title: 'Cocinar para un refugio', loc: 'Albergue temporal', prio: 'media', skill: 'cocina' },
+  { title: 'Acompañar a adultos mayores', loc: 'Refugio o vivienda', prio: 'baja', skill: 'primeros' },
+  { title: 'Rescatar o cuidar mascotas', loc: 'Zona afectada', prio: 'baja', skill: 'mascotas' },
+];
+
+function ExampleBoard() {
+  return (
+    <div className="examples">
+      <div className="ex-note">
+        <b>Aún no hay tareas publicadas.</b> Así se verán cuando la coordinación cargue necesidades reales — y esto es lo que <b>tú puedes reportar</b> si lo ves a tu alrededor:
+      </div>
+      <div className="task-grid">
+        {EXAMPLE_TASKS.map((e, i) => (
+          <div className="task example" data-prio={e.prio} key={i} style={{ animationDelay: `${i * 45}ms` }}>
+            <span className="spine" />
+            <span className="ex-tag">Ejemplo</span>
+            <div className="head">
+              <div><div className="title">{e.title}</div><div className="loc"><span>📍</span>{e.loc}</div></div>
+              <span className="prio-tag">{PRIOS[e.prio].label}</span>
+            </div>
+            <div className="body"><div className="skill-line"><span className="skill">{SKILLS[e.skill].icon} {SKILLS[e.skill].label}</span></div></div>
+          </div>
+        ))}
+      </div>
+      <div className="ex-cta">¿Viste una necesidad así? Toca <b>📢 Reportar</b> arriba para avisar a la coordinación.</div>
+    </div>
+  );
 }
