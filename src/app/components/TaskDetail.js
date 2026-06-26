@@ -32,18 +32,17 @@ export default function TaskDetail({ t, mode, distanceLabel, h, onClose }) {
         </div>
         <div className="sub">{Z?.name} · {Z?.sector}</div>
 
-        <div className="meta" style={{ marginBottom: 14 }}>
-          <div className="row"><span className="mi">📍</span><span>{t.loc}</span></div>
-          <div className="row"><span className="mi">👥</span>Hacen falta <b>&nbsp;{t.need}&nbsp;</b> {t.need === 1 ? 'persona' : 'personas'}</div>
-          {sk && <div className="row"><span className="mi">🛠️</span><span className="skill">{sk.icon} {sk.label}</span></div>}
-          {distanceLabel && <div className="row"><span className="mi">🧭</span>A <b>&nbsp;{distanceLabel}&nbsp;</b> de tu ubicación</div>}
+        <div className="detail-meta">
+          <div className="dm-row"><span className="dm-k">Ubicación</span><span className="dm-v">{t.loc}</span></div>
+          <div className="dm-row"><span className="dm-k">Equipo</span><span className="dm-v">Faltan <b>{t.need}</b> {t.need === 1 ? 'persona' : 'personas'}{sk ? ` · ${sk.label}` : ''}</span></div>
+          {distanceLabel && <div className="dm-row"><span className="dm-k">Distancia</span><span className="dm-v"><b style={{ color: 'var(--ve-blue)' }}>{distanceLabel}</b> de tu ubicación</span></div>}
         </div>
 
         <TaskMiniMap zone={t.zone} color={PRIO_HEX[t.prio]} />
 
         <div className="cupos">
           <div className="bar"><i style={{ width: `${pct}%` }} /></div>
-          <div className="lab"><span>{taken} de {t.need} {taken === 1 ? 'cupo' : 'cupos'}</span><span>🕐 {ago(t.created)}</span></div>
+          <div className="lab"><span>{taken} de {t.need} {taken === 1 ? 'cupo' : 'cupos'}</span><span>{ago(t.created)}</span></div>
         </div>
         <div className="foot" style={{ marginTop: 12 }}>
           <span className={`state-badge ${cls}`}><span className="led" />{label}</span>
@@ -53,7 +52,7 @@ export default function TaskDetail({ t, mode, distanceLabel, h, onClose }) {
           <button className="btn btn-ghost" onClick={onClose}>Cerrar</button>
           {mode === 'vol'
             ? (taken < t.need
-                ? <button className="btn btn-take" onClick={take}>✋ Tomar esta tarea</button>
+                ? <button className="btn btn-take" onClick={take}>Tomar esta tarea</button>
                 : <button className="btn btn-ghost" disabled>Cupos completos</button>)
             : <button className="btn btn-danger" onClick={() => { h.cancel(t.id); onClose(); }}>Cerrar tarea</button>}
         </div>

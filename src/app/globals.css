@@ -245,8 +245,25 @@ body::before {
 
 .task .foot { margin-top: 14px; display: flex; align-items: center; gap: 8px; }
 .task .stamp { font-size: 12.5px; color: var(--ink-faint); }
-.task .open-hint { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--ve-blue); white-space: nowrap; }
+.task .open-hint { margin-left: auto; font-size: 12.5px; font-weight: 600; color: var(--ve-blue); white-space: nowrap; }
 .task[role="button"]:hover { border-color: var(--ve-blue-bright); }
+
+/* ----- Tarjeta limpia (sin emojis, ordenada) ----- */
+.task.tidy .loc { margin-top: 7px; font-size: 14.5px; color: var(--ink); font-weight: 500; }
+.task.tidy .facts { margin-top: 9px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13.5px; color: var(--ink-soft); }
+.task.tidy .facts b { color: var(--ink); font-weight: 700; }
+.task.tidy .facts .skill { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 7px; background: var(--surface-2); color: var(--ink-soft); border: 1px solid var(--border); }
+.task.tidy .dist { margin-top: 7px; font-size: 13px; color: var(--ink-faint); }
+.task.tidy .dist b { color: var(--ve-blue); font-weight: 700; }
+.task.tidy .cupos { margin-top: 14px; }
+.task.tidy .lab { font-size: 12px; }
+
+/* meta limpio del detalle (modal) */
+.detail-meta { margin: 4px 0 16px; display: grid; gap: 1px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
+.dm-row { display: flex; gap: 12px; padding: 11px 14px; background: var(--surface-2); }
+.dm-row .dm-k { flex: 0 0 92px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--ink-faint); padding-top: 1px; }
+.dm-row .dm-v { font-size: 14px; color: var(--ink); }
+.dm-row .dm-v b { font-weight: 700; }
 
 .state-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
 .state-badge .led { width: 6px; height: 6px; border-radius: 50%; }
