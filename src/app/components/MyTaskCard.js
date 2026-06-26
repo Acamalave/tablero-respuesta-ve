@@ -34,7 +34,7 @@ const PHASES = [
 ];
 const IDX = { tomada: 0, curso: 1, completada: 2 };
 
-export default function MyTaskCard({ t, mine, online, contact, h, i = 0 }) {
+export default function MyTaskCard({ t, mine, online, h, i = 0 }) {
   const cur = IDX[mine.state] ?? 0;
   const sk = SKILLS[t.skill];
 

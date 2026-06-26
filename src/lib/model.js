@@ -70,7 +70,6 @@ export const PRIOS = {
 };
 export const PRIO_ORDER = { alta: 0, media: 1, baja: 2 };
 
-export const COORD_CONTACT = 'Coord. Cáritas · +58 412-0000000';
 export const COORD_NAME = 'Coord. Cáritas';
 // Teléfono del coordinador (placeholder — cámbialo por el real de la organización).
 export const COORD_PHONE = '+58 412 0000000';

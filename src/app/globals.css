@@ -107,7 +107,6 @@ body::before {
 .netchip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--p-baja); }
 .netchip.off { color: var(--p-media); border-color: #f3d9b3; background: var(--p-media-bg); }
 .netchip.off .dot { background: var(--p-media); animation: pulse 1.4s infinite; }
-.netchip.syncing .dot { background: var(--ve-blue-bright); animation: pulse 1s infinite; }
 @keyframes pulse { 50% { opacity: .35; } }
 
 /* botón sutil para volver a elegir rol */
@@ -236,10 +235,6 @@ body::before {
 .task[data-prio="baja"]  .prio-tag { color: var(--p-baja); background: var(--p-baja-bg); }
 .tag-mine { color: var(--ve-blue) !important; background: #eaf1fd !important; }
 
-.task .meta { margin-top: 12px; display: grid; gap: 7px; }
-.task .meta .row { display: flex; align-items: center; gap: 9px; font-size: 14px; color: var(--ink-soft); }
-.task .meta .row .mi { width: 17px; text-align: center; flex-shrink: 0; }
-.task .meta .row b { color: var(--ink); font-weight: 600; }
 .task .skill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; padding: 4px 10px; border-radius: 8px; background: #eaf1fd; color: var(--ve-blue); }
 
 /* mini-mapa dentro de la tarea */

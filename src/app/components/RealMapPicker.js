@@ -14,6 +14,7 @@ export default function RealMapPicker({ value, onPick }) {
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const LRef = useRef(null);
+  const internalRef = useRef(false); // marca un cambio originado por clic en el mapa
   const onPickRef = useRef(onPick);
   onPickRef.current = onPick;
 
@@ -38,7 +39,7 @@ export default function RealMapPicker({ value, onPick }) {
         else markerRef.current = L.marker([lat, lng], { icon }).addTo(map);
       };
       if (value && value.lat) place(value.lat, value.lng);
-      map.on('click', (e) => { place(e.latlng.lat, e.latlng.lng); onPickRef.current?.({ lat: e.latlng.lat, lng: e.latlng.lng }); });
+      map.on('click', (e) => { internalRef.current = true; place(e.latlng.lat, e.latlng.lng); onPickRef.current?.({ lat: e.latlng.lat, lng: e.latlng.lng }); });
       setTimeout(() => map.invalidateSize(), 120);
     })();
     return () => { cancelled = true; if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; markerRef.current = null; } };
@@ -48,6 +49,8 @@ export default function RealMapPicker({ value, onPick }) {
   useEffect(() => {
     const L = LRef.current, map = mapRef.current;
     if (!L || !map || !value || !value.lat) return;
+    if (internalRef.current) { internalRef.current = false; return; } // fue un clic: ya quedó el pin
+    // cambio externo (GPS): coloca el pin y centra el mapa
     const icon = L.divIcon({ className: 'rmp-pin', html: PIN_HTML, iconSize: [30, 30], iconAnchor: [15, 28] });
     if (markerRef.current) markerRef.current.setLatLng([value.lat, value.lng]);
     else markerRef.current = L.marker([value.lat, value.lng], { icon }).addTo(map);

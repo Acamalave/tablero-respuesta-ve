@@ -13,7 +13,7 @@ import TacticalMap from './components/TacticalMap';
 import RealMapPicker from './components/RealMapPicker';
 import {
   ZONES, ZONE_KEYS, SKILLS, PRIOS, PRIO_ORDER,
-  dist, kmTo, fmtKm, taskState, avatarFor, prioBg, ago, COORD_CONTACT,
+  dist, kmTo, fmtKm, taskState, avatarFor, prioBg, ago,
 } from '@/lib/model';
 import * as store from '@/lib/store';
 
@@ -47,7 +47,6 @@ export default function Page() {
   const [stats, setStats] = useState({ abiertas: 0, encurso: 0, completadas: 0, pend: 0 });
   const [me, setMe] = useState({});                // perfil propio (contadores)
   const [refreshing, setRefreshing] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState(0);
   const [online, setOnline] = useState(true);
   const [coordTab, setCoordTab] = useState('tablero');
   const [volTab, setVolTab] = useState('tablero');
@@ -118,7 +117,6 @@ export default function Page() {
           setMyReports(await store.fetchMyReports(uid));
         }
       }
-      setLastUpdated(Date.now());
     } catch { /* offline: la caché local sirve los últimos datos */ }
     finally { setRefreshing(false); }
   }, [ready, role, mode, coordTab, uid]);
@@ -481,7 +479,7 @@ function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volT
         ) : (
           <>
             <div className="focus-note"><span>🎯</span><span>Tienes una tarea en curso. Su estado se actualiza en tiempo real. Termínala o déjala para ver otras.</span></div>
-            <div className="task-grid"><MyTaskCard t={activeT} mine={activeMine} online={online} contact={COORD_CONTACT} h={h} /></div>
+            <div className="task-grid"><MyTaskCard t={activeT} mine={activeMine} online={online} h={h} /></div>
           </>
         )
       ) : volTab === 'tablero' ? (
@@ -507,7 +505,7 @@ function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volT
         </>
       ) : (
         done.length
-          ? <div className="task-grid">{done.map((o, i) => <MyTaskCard key={o.t.id} t={o.t} mine={o.mine} online={online} contact={COORD_CONTACT} h={h} i={i} />)}</div>
+          ? <div className="task-grid">{done.map((o, i) => <MyTaskCard key={o.t.id} t={o.t} mine={o.mine} online={online} h={h} i={i} />)}</div>
           : <Empty title="Aún no has completado tareas" sub="Toma una tarea en “Tareas abiertas”. Aparecerá aquí con su estatus." />
       )}
     </>
