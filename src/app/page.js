@@ -760,7 +760,6 @@ function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boa
   return (
     <section className="view">
       <div className="panel prof-head">
-        <button className="prof-edit-ic" onClick={onEditProfile} title="Editar mis datos" aria-label="Editar mis datos">✏️</button>
         <div className="who">
           <b>{user.name}</b>
           <span>📞 {user.phone} &nbsp;·&nbsp; 🪪 {user.cedula}</span>
@@ -769,6 +768,7 @@ function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boa
           <button className="ps help" onClick={verCompletadas} title="Ver tus tareas completadas"><b>{counters.done}</b><span>Ayudas ›</span></button>
           <div className="ps rep"><b>{counters.reports}</b><span>Reportes</span></div>
         </div>
+        <button className="prof-edit-ic" onClick={onEditProfile} title="Editar mis datos" aria-label="Editar mis datos">✏️</button>
       </div>
 
       <div className="subtabs mode-switch">
