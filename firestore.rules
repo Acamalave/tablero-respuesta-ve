@@ -123,7 +123,8 @@ service cloud.firestore {
         && request.resource.data.text is string && request.resource.data.text.size() >= 1 && request.resource.data.text.size() <= 800
         && request.resource.data.created is int
         && request.resource.data.active == true;
-      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active'])
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text','active'])
+        && request.resource.data.text is string && request.resource.data.text.size() >= 1 && request.resource.data.text.size() <= 800
         && request.resource.data.active is bool;
       allow delete: if false;
     }

@@ -553,6 +553,7 @@ textarea.input { resize: vertical; min-height: 84px; }
 .info-card::before { content: '📢'; position: absolute; right: -8px; bottom: -16px; font-size: 84px; opacity: .12; pointer-events: none; }
 .info-card .info-head { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
 .info-card .info-tag { font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: #bcd4f7; }
+.info-card .info-acts { display: flex; gap: 6px; flex-shrink: 0; }
 .info-card .info-x { flex-shrink: 0; width: 26px; height: 26px; border-radius: 8px; border: 0; background: rgba(255,255,255,.16); color: #fff; font-weight: 800; font-size: 13px; cursor: pointer; line-height: 1; }
 .info-card .info-x:hover { background: rgba(255,255,255,.3); }
 .info-card .info-text { position: relative; font-size: 15px; line-height: 1.5; font-weight: 500; color: #fff; margin-bottom: 14px; }

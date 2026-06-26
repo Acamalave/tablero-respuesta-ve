@@ -187,6 +187,7 @@ export async function fetchAnnouncements(max = 20) {
     return s.docs.map(row).sort((a, b) => (b.created || 0) - (a.created || 0));
   } catch { return []; }
 }
+export const updateAnnouncement = (id, text) => updateDoc(doc(ANNOUNCEMENTS, id), { text }).catch(() => {});
 // "Quitar" = ocultar (soft-delete) para no borrar de verdad.
 export const hideAnnouncement = (id) => updateDoc(doc(ANNOUNCEMENTS, id), { active: false }).catch(() => {});
 

@@ -53,7 +53,7 @@ export default function Page() {
   const [volunteers, setVolunteers] = useState([]);
   const [suggestions, setSuggestions] = useState([]); // sugerencias (coordinador)
   const [announcements, setAnnouncements] = useState([]); // info para difundir
-  const [announceModal, setAnnounceModal] = useState(false); // admin: agregar info
+  const [announceModal, setAnnounceModal] = useState(null); // admin: null | {} (nuevo) | anuncio (editar)
   const [visitsCount, setVisitsCount] = useState(0);  // KPI: personas únicas que ingresaron
   const [suggestModal, setSuggestModal] = useState(false); // usuario: enviar sugerencia
   const [detailVol, setDetailVol] = useState(null);   // coordinador: perfil en vista previa
@@ -245,12 +245,13 @@ export default function Page() {
     pushToast('¡Gracias por tu sugerencia!', 'La coordinación la revisará para mejorar la app.', '💡', 'Enviado');
   };
 
-  // Coordinador: agregar / quitar tarjetas de información (difundir)
-  const addAnnouncement = async (text) => {
-    await store.createAnnouncement(text);
-    setAnnounceModal(false);
+  // Coordinador: crear / editar / quitar tarjetas de información (difundir)
+  const saveAnnouncement = async (text, id) => {
+    if (id) await store.updateAnnouncement(id, text);
+    else await store.createAnnouncement(text);
+    setAnnounceModal(null);
     await refresh();
-    pushToast('Información publicada', 'Ya aparece entre las tareas para difundir.', '📢', 'Coordinador');
+    pushToast(id ? 'Información actualizada' : 'Información publicada', id ? 'Se guardaron los cambios.' : 'Ya aparece entre las tareas para difundir.', '📢', 'Coordinador');
   };
   const removeAnnouncement = async (id) => {
     await store.hideAnnouncement(id);
@@ -300,9 +301,9 @@ export default function Page() {
             onCoordinator={() => { if (isAdmin) { setRole('coordinador'); setCoordTab('tablero'); } else setAdminGate(true); }}
           />
         ) : role === 'coordinador' ? (
-          <Coordinador {...{ tasks, reports, volunteers, suggestions, visitsCount, registered: helpers, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, announcements, isAdmin, onAddInfo: () => setAnnounceModal(true), onRemoveInfo: removeAnnouncement, onEditCoord: () => setEditCoord(true), onOpenVol: setDetailVol, onSuggestStatus: async (id, st) => { await store.setSuggestionStatus(id, st); setSuggestions((s) => s.map((x) => (x.id === id ? { ...x, status: st } : x))); }, openCreate: (p) => setModal({ prefill: p || null }), onConvert: (r) => setModal({ prefill: r }), onDiscard: async (id) => { await store.setReportStatus(id, 'descartado'); refresh(); } }} />
+          <Coordinador {...{ tasks, reports, volunteers, suggestions, visitsCount, registered: helpers, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, announcements, isAdmin, onAddInfo: () => setAnnounceModal({}), onEditInfo: (a) => setAnnounceModal(a), onRemoveInfo: removeAnnouncement, onEditCoord: () => setEditCoord(true), onOpenVol: setDetailVol, onSuggestStatus: async (id, st) => { await store.setSuggestionStatus(id, st); setSuggestions((s) => s.map((x) => (x.id === id ? { ...x, status: st } : x))); }, openCreate: (p) => setModal({ prefill: p || null }), onConvert: (r) => setModal({ prefill: r }), onDiscard: async (id) => { await store.setReportStatus(id, 'descartado'); refresh(); } }} />
         ) : user ? (
-          <Usuario {...{ user: { ...user, uid }, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, uid, online, volView, setVolView, h, coord, announcements, isAdmin, onRemoveInfo: removeAnnouncement, onEditProfile: () => setEditProfile(true), onSuggest: () => setSuggestModal(true), onSendReport: sendReport, userPos, geoState, requestGeo }} />
+          <Usuario {...{ user: { ...user, uid }, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, uid, online, volView, setVolView, h, coord, announcements, isAdmin, onEditInfo: (a) => setAnnounceModal(a), onRemoveInfo: removeAnnouncement, onEditProfile: () => setEditProfile(true), onSuggest: () => setSuggestModal(true), onSendReport: sendReport, userPos, geoState, requestGeo }} />
         ) : (
           <Registro initialMode={mode} onDone={register} />
         )}
@@ -323,7 +324,7 @@ export default function Page() {
       {editProfile && user && <EditProfileModal user={user} onClose={() => setEditProfile(false)} onSave={saveProfile} />}
       {editCoord && <CoordContactModal coord={coord} onClose={() => setEditCoord(false)} onSave={saveCoord} />}
       {suggestModal && <SuggestionModal onClose={() => setSuggestModal(false)} onSend={sendSuggestion} />}
-      {announceModal && <AnnounceModal onClose={() => setAnnounceModal(false)} onSave={addAnnouncement} />}
+      {announceModal && <AnnounceModal initial={announceModal} onClose={() => setAnnounceModal(null)} onSave={saveAnnouncement} />}
       {detailVol && <VolunteerDetail vol={detailVol} onClose={() => setDetailVol(null)} onSave={saveVolunteerAdmin} />}
 
       {adminGate && <AdminGate onClose={() => setAdminGate(false)} onOk={() => {
@@ -593,13 +594,14 @@ function SuggestionModal({ onClose, onSend }) {
 }
 
 // Coordinador publica una tarjeta de información para difundir.
-function AnnounceModal({ onClose, onSave }) {
-  const [text, setText] = useState('');
+function AnnounceModal({ initial, onClose, onSave }) {
+  const editing = !!(initial && initial.id);
+  const [text, setText] = useState((initial && initial.text) || '');
   const ok = text.trim().length >= 4;
   return (
     <div className="modal-bg show" onClick={(e) => { if (e.target.classList.contains('modal-bg')) onClose(); }}>
       <div className="modal" style={{ maxWidth: 480 }}>
-        <h3>📢 Publicar información</h3>
+        <h3>📢 {editing ? 'Editar información' : 'Publicar información'}</h3>
         <div className="sub">Aparece como tarjeta destacada entre las tareas, para que la gente la difunda.</div>
         <div className="field">
           <label>Mensaje</label>
@@ -608,7 +610,7 @@ function AnnounceModal({ onClose, onSave }) {
         </div>
         <div className="actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-take" disabled={!ok} onClick={() => onSave(text.trim())}>Publicar</button>
+          <button className="btn btn-take" disabled={!ok} onClick={() => onSave(text.trim(), editing ? initial.id : null)}>{editing ? 'Guardar cambios' : 'Publicar'}</button>
         </div>
       </div>
     </div>
@@ -752,7 +754,7 @@ function Registro({ initialMode, onDone }) {
 /* ====================================================================
    USUARIO — perfil unificado con switch Ayudar / Reportar
    ==================================================================== */
-function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, online, volView, setVolView, h, coord, announcements, isAdmin, onRemoveInfo, onEditProfile, onSuggest, onSendReport, userPos, geoState, requestGeo }) {
+function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, online, volView, setVolView, h, coord, announcements, isAdmin, onEditInfo, onRemoveInfo, onEditProfile, onSuggest, onSendReport, userPos, geoState, requestGeo }) {
   // El contador de "Ayudas" lleva a las tareas completadas.
   const verCompletadas = () => { setMode('voluntario'); setVolView('completadas'); };
   return (
@@ -775,7 +777,7 @@ function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boa
       </div>
 
       {mode === 'voluntario'
-        ? <VolunteerArea tasks={tasks} myTasks={myTasks} boardMore={boardMore} loadMore={loadMore} user={user} online={online} volView={volView} setVolView={setVolView} h={h} coord={coord} announcements={announcements} isAdmin={isAdmin} onRemoveInfo={onRemoveInfo} userPos={userPos} geoState={geoState} requestGeo={requestGeo} />
+        ? <VolunteerArea tasks={tasks} myTasks={myTasks} boardMore={boardMore} loadMore={loadMore} user={user} online={online} volView={volView} setVolView={setVolView} h={h} coord={coord} announcements={announcements} isAdmin={isAdmin} onEditInfo={onEditInfo} onRemoveInfo={onRemoveInfo} userPos={userPos} geoState={geoState} requestGeo={requestGeo} />
         : <ReportArea myReports={myReports} onSend={onSendReport} onSwitch={() => setMode('voluntario')} userPos={userPos} requestGeo={requestGeo} />}
 
       <div className="suggest-cta">
@@ -786,7 +788,7 @@ function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boa
   );
 }
 
-function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volView, setVolView, h, coord, announcements, isAdmin, onRemoveInfo, userPos, geoState, requestGeo }) {
+function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volView, setVolView, h, coord, announcements, isAdmin, onEditInfo, onRemoveInfo, userPos, geoState, requestGeo }) {
   const [openId, setOpenId] = useState(null);
   const [liveActive, setLiveActive] = useState(null); // tarea en foco en TIEMPO REAL
   const [shown, setShown] = useState(5);              // muestra 5, "cargar más" suma 5
@@ -883,7 +885,7 @@ function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volV
   // 4) Tablero (vista por defecto): siempre las tareas por hacer
   return (
     <>
-      <InfoList announcements={announcements} isAdmin={isAdmin} onRemove={onRemoveInfo} />
+      <InfoList announcements={announcements} isAdmin={isAdmin} onEdit={onEditInfo} onRemove={onRemoveInfo} />
       {!userPos && (
         <div style={{ marginBottom: 14 }}>
           <button className="btn btn-ghost btn-sm" onClick={requestGeo}>{geoState === 'asking' ? '📍 Ubicando…' : '📍 Usar mi ubicación para ver distancias'}</button>
@@ -1030,7 +1032,7 @@ function ReportArea({ myReports, onSend, onSwitch, userPos, requestGeo }) {
 /* ====================================================================
    COORDINADOR
    ==================================================================== */
-function Coordinador({ tasks, reports, volunteers, suggestions, visitsCount, registered, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, announcements, isAdmin, onAddInfo, onRemoveInfo, onEditCoord, onOpenVol, onSuggestStatus, openCreate, onConvert, onDiscard }) {
+function Coordinador({ tasks, reports, volunteers, suggestions, visitsCount, registered, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, announcements, isAdmin, onAddInfo, onEditInfo, onRemoveInfo, onEditCoord, onOpenVol, onSuggestStatus, openCreate, onConvert, onDiscard }) {
   const newSugg = suggestions.filter((s) => s.status === 'nueva').length;
   return (
     <section className="view">
@@ -1058,7 +1060,7 @@ function Coordinador({ tasks, reports, volunteers, suggestions, visitsCount, reg
           </button>
         ))}
       </div>
-      {coordTab === 'tablero' && <CoordBoard tasks={tasks} h={h} boardMore={boardMore} loadMore={loadMore} announcements={announcements} isAdmin={isAdmin} onRemoveInfo={onRemoveInfo} />}
+      {coordTab === 'tablero' && <CoordBoard tasks={tasks} h={h} boardMore={boardMore} loadMore={loadMore} announcements={announcements} isAdmin={isAdmin} onEditInfo={onEditInfo} onRemoveInfo={onRemoveInfo} />}
       {coordTab === 'voluntarios' && <Roster volunteers={volunteers} onOpen={onOpenVol} />}
       {coordTab === 'mapa' && <TacticalMap tasks={tasks} />}
       {coordTab === 'reportes' && <Inbox reports={reports} onConvert={onConvert} onDiscard={onDiscard} />}
@@ -1071,7 +1073,7 @@ function Stat({ n, l, a }) {
   return <div className="stat" style={{ '--accent': a }}><div className="num">{n}</div><div className="lbl">{l}</div></div>;
 }
 
-function CoordBoard({ tasks, h, boardMore, loadMore, announcements, isAdmin, onRemoveInfo }) {
+function CoordBoard({ tasks, h, boardMore, loadMore, announcements, isAdmin, onEditInfo, onRemoveInfo }) {
   const [openId, setOpenId] = useState(null);
   const openTask = tasks.find((t) => t.id === openId);
   const groups = ['alta', 'media', 'baja'].map((prio) => {
@@ -1090,7 +1092,7 @@ function CoordBoard({ tasks, h, boardMore, loadMore, announcements, isAdmin, onR
   });
   return (
     <>
-      <InfoList announcements={announcements} isAdmin={isAdmin} onRemove={onRemoveInfo} />
+      <InfoList announcements={announcements} isAdmin={isAdmin} onEdit={onEditInfo} onRemove={onRemoveInfo} />
       {groups.some(Boolean) ? groups : <Empty title="Sin tareas activas" sub="Crea la primera tarea para empezar a coordinar." />}
       {boardMore && <div style={{ textAlign: 'center', marginTop: 8 }}><button className="btn btn-ghost btn-sm" onClick={loadMore}>Cargar más tareas</button></div>}
       {openTask && <TaskDetail t={openTask} mode="coord" h={h} onClose={() => setOpenId(null)} />}
@@ -1227,21 +1229,26 @@ function Empty({ title, sub }) {
 }
 
 // Tarjetas de INFORMACIÓN para difundir (tono distinto, resaltan entre las tareas).
-function InfoList({ announcements, isAdmin, onRemove }) {
+function InfoList({ announcements, isAdmin, onEdit, onRemove }) {
   if (!announcements || !announcements.length) return null;
   return (
     <div className="info-stack">
-      {announcements.map((a) => <InfoCard key={a.id} a={a} isAdmin={isAdmin} onRemove={onRemove} />)}
+      {announcements.map((a) => <InfoCard key={a.id} a={a} isAdmin={isAdmin} onEdit={onEdit} onRemove={onRemove} />)}
     </div>
   );
 }
-function InfoCard({ a, isAdmin, onRemove }) {
+function InfoCard({ a, isAdmin, onEdit, onRemove }) {
   const wa = `https://wa.me/?text=${encodeURIComponent(`${a.text}\n\n📲 Súmate y ayuda en Tarea: Venezuela → https://tareavenezuela.com`)}`;
   return (
     <div className="info-card">
       <div className="info-head">
         <span className="info-tag">📢 Información · para difundir</span>
-        {isAdmin && <button className="info-x" onClick={() => onRemove(a.id)} title="Quitar información" aria-label="Quitar">✕</button>}
+        {isAdmin && (
+          <span className="info-acts">
+            <button className="info-x" onClick={() => onEdit(a)} title="Editar información" aria-label="Editar">✏️</button>
+            <button className="info-x" onClick={() => onRemove(a.id)} title="Quitar información" aria-label="Quitar">✕</button>
+          </span>
+        )}
       </div>
       <p className="info-text">{a.text}</p>
       <a className="btn btn-wa btn-sm" href={wa} target="_blank" rel="noopener noreferrer">💬 Difundir por WhatsApp</a>
