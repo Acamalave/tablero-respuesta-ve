@@ -5,7 +5,7 @@
    como voluntario y/o REPORTAR. El perfil es el mismo y cuenta ambas.
    ===================================================================== */
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import Flag from './components/Flag';
+import Logo from './components/Logo';
 import TaskCard from './components/TaskCard';
 import TaskDetail from './components/TaskDetail';
 import MyTaskCard from './components/MyTaskCard';
@@ -219,7 +219,7 @@ export default function Page() {
     <div className="app">
       <header className="topbar">
         <div className="brand" onClick={() => setRole(null)} title="Volver al inicio">
-          <span className="flag"><Flag size={40} /></span>
+          <span className="flag"><Logo size={40} /></span>
           <div className="brand-txt">
             <h1>TAREA: <b>VENEZUELA</b></h1>
             <span>Coordinación de tareas</span>
