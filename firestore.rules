@@ -2,17 +2,111 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // ─────────────────────────────────────────────────────────────
-    // Tablero de Respuesta VE — MODO DEMO (plan gratuito Spark)
-    // Acceso abierto para que el prototipo funcione en vivo sin
-    // provisionar Firebase Auth (Identity Platform requiere billing).
+    // Tarea: Venezuela — Reglas ENDURECIDAS para producción.
     //
-    // PRODUCCIÓN: cambiar a verificación por teléfono (SMS) y
-    //   allow read: if true;
-    //   allow write: if request.auth != null;   // + reglas por rol
+    // No hay Firebase Auth (Identity Platform requiere Blaze), así que NO se
+    // puede distinguir "coordinador" de "usuario" del lado servidor. Lo que
+    // SÍ se hace aquí, para reducir el daño de un atacante:
+    //   • Prohibir DELETE en todo (nadie puede borrar/vaciar datos).
+    //   • Validar forma, tipos y TAMAÑO de cada escritura (sin payloads gigantes).
+    //   • Restringir valores a enums (estados/prioridades válidas).
+    //   • Acotar contadores (done/reports solo pueden subir de a 1).
+    //   • Denegar cualquier colección no contemplada.
+    //
+    // La defensa contra "solicitudes infinitas"/bots NO vive aquí: vive en
+    // Firebase App Check (reCAPTCHA), que exige que las peticiones vengan de
+    // la app real. Estas reglas + App Check son la protección completa.
     // ─────────────────────────────────────────────────────────────
-    match /tasks/{id}      { allow read, write: if true; }
-    match /reports/{id}    { allow read, write: if true; }
-    match /volunteers/{id} { allow read, write: if true; }
-    match /config/{id}     { allow read, write: if true; }
+
+    function str(v, max)      { return v is string && v.size() <= max; }                 // string requerido y acotado
+    function ostr(d, f, max)  { return !(f in d) || d[f] == null || (d[f] is string && d[f].size() <= max); } // string opcional
+    function olist(d, f, max) { return !(f in d) || (d[f] is list && d[f].size() <= max); }                    // lista opcional acotada
+    function same(f)          { return request.resource.data[f] == resource.data[f]; }    // campo no cambia
+    function counterOk(f) {     // un contador: igual, o exactamente +1 (no inflar)
+      return !(f in request.resource.data) || !(f in resource.data)
+        || request.resource.data[f] == resource.data[f]
+        || request.resource.data[f] == resource.data[f] + 1;
+    }
+
+    // ───────────────────────── tasks ─────────────────────────
+    function validTask(d) {
+      return d.keys().hasOnly(['title','prio','zone','loc','need','skill','reporterName','reporterPhone','created','takenBy','status','state','active','takerUids'])
+        && str(d.title, 140) && d.title.size() >= 1
+        && d.prio in ['alta','media','baja']
+        && ostr(d,'zone',40) && ostr(d,'loc',200) && ostr(d,'skill',40)
+        && d.need is int && d.need >= 1 && d.need <= 200
+        && ostr(d,'reporterName',120) && ostr(d,'reporterPhone',40)
+        && d.created is int
+        && olist(d,'takenBy',200) && olist(d,'takerUids',200)
+        && (!('status' in d) || d.status in ['activa','cancelada'])
+        && (!('state'  in d) || d.state in ['abierta','tomada','curso','completada','cancelada'])
+        && (!('active' in d) || d.active is bool);
+    }
+    match /tasks/{id} {
+      allow read:   if true;
+      allow create: if validTask(request.resource.data);
+      allow update: if
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['takenBy','state','active','takerUids','prio','status'])
+        && same('created') && same('title') && same('need')
+        && request.resource.data.prio in ['alta','media','baja']
+        && request.resource.data.status in ['activa','cancelada']
+        && request.resource.data.state in ['abierta','tomada','curso','completada','cancelada']
+        && request.resource.data.takenBy is list   && request.resource.data.takenBy.size()   <= 200
+        && request.resource.data.takerUids is list && request.resource.data.takerUids.size() <= 200;
+      allow delete: if false;
+    }
+
+    // ───────────────────────── reports ─────────────────────────
+    function validReport(d) {
+      return d.keys().hasOnly(['need','loc','zone','lat','lng','note','reporterUid','reporterName','reporterPhone','reporterCedula','created','status'])
+        && str(d.need, 200)
+        && ostr(d,'loc',200) && ostr(d,'zone',40) && ostr(d,'note',600)
+        && (!('lat' in d) || d.lat == null || d.lat is number)
+        && (!('lng' in d) || d.lng == null || d.lng is number)
+        && ostr(d,'reporterUid',60) && ostr(d,'reporterName',120)
+        && ostr(d,'reporterPhone',40) && ostr(d,'reporterCedula',40)
+        && d.created is int
+        && d.status == 'pendiente';
+    }
+    match /reports/{id} {
+      allow read:   if true;
+      allow create: if validReport(request.resource.data);
+      allow update: if
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in ['pendiente','convertido','descartado'];
+      allow delete: if false;
+    }
+
+    // ───────────────────────── volunteers ─────────────────────────
+    function validVol(d) {
+      return d.keys().hasOnly(['name','zone','skills','phone','cedula','done','reports'])
+        && str(d.name, 120) && d.name.size() >= 1
+        && ostr(d,'zone',40) && ostr(d,'phone',40) && ostr(d,'cedula',40)
+        && olist(d,'skills',40)
+        && (!('done'    in d) || (d.done is int    && d.done    >= 0 && d.done    <= 100000))
+        && (!('reports' in d) || (d.reports is int && d.reports >= 0 && d.reports <= 100000));
+    }
+    match /volunteers/{id} {
+      allow read:   if true;
+      allow create: if validVol(request.resource.data);
+      allow update: if validVol(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','zone','skills','phone','cedula','done','reports'])
+        && counterOk('done') && counterOk('reports');
+      allow delete: if false;
+    }
+
+    // ───────────────────────── config (contacto del coordinador) ─────────────────────────
+    match /config/{id} {
+      allow read:  if true;
+      allow write: if request.resource.data.keys().hasOnly(['name','phone'])
+        && ostr(request.resource.data,'name',120)
+        && ostr(request.resource.data,'phone',40);
+      allow delete: if false;
+    }
+
+    // Cualquier otra colección: denegada explícitamente.
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }
