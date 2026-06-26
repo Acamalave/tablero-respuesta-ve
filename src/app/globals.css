@@ -497,6 +497,26 @@ textarea.input { resize: vertical; min-height: 84px; }
 .modal .actions { display: flex; gap: 10px; margin-top: 22px; }
 .modal .actions .btn { flex: 1; }
 
+/* ===================== Bienvenida (primera vez) ===================== */
+.modal.welcome { max-width: 480px; padding-top: 28px; text-align: left; }
+.welcome .wel-flag { display: flex; height: 6px; border-radius: 999px; overflow: hidden; margin-bottom: 18px; }
+.welcome .wel-flag i { flex: 1; }
+.welcome .wel-flag .y { background: #FCD116; }
+.welcome .wel-flag .b { background: #00247D; }
+.welcome .wel-flag .r { background: #CF142B; }
+.welcome .wel-eyebrow { font-size: 12.5px; font-weight: 800; letter-spacing: .03em; color: var(--ve-blue); text-transform: uppercase; }
+.welcome h3 { font-size: 24px; margin: 7px 0 0; letter-spacing: -.01em; line-height: 1.1; }
+.welcome .wel-goal { font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 12px 0 18px; }
+.welcome .wel-goal b { color: var(--ink); font-weight: 700; }
+.welcome .wel-steps { list-style: none; display: flex; flex-direction: column; gap: 13px; margin: 0 0 18px; }
+.welcome .wel-steps li { display: flex; gap: 12px; align-items: flex-start; }
+.welcome .wel-steps .ic { flex-shrink: 0; width: 38px; height: 38px; border-radius: 11px; background: var(--surface-2); border: 1px solid var(--border); display: grid; place-items: center; font-size: 18px; }
+.welcome .wel-steps b { display: block; font-size: 14px; color: var(--ink); }
+.welcome .wel-steps span { display: block; font-size: 12.5px; line-height: 1.45; color: var(--ink-faint); margin-top: 2px; }
+.welcome .wel-note { font-size: 12.5px; line-height: 1.5; color: var(--ink-faint); background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 11px 13px; margin: 0 0 18px; }
+.welcome .wel-note b { color: var(--ink-soft); }
+.welcome .wel-note .hd-strong { color: var(--ve-blue); font-family: var(--font-display); font-weight: 800; }
+
 /* ===================== Toasts ===================== */
 .toasts { position: fixed; bottom: 22px; right: 22px; z-index: 300; display: flex; flex-direction: column; gap: 10px; max-width: 360px; }
 .toast { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 15px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-lg); animation: toastIn .4s var(--ease); }

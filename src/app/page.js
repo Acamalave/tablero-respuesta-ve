@@ -21,6 +21,7 @@ const USER_KEY = 'tablero_user_v1';
 const ADMIN_KEY = 'tablero_admin_v1';
 const MODE_KEY = 'tablero_mode_v1';   // 'voluntario' | 'reportante'
 const VIEW_KEY = 'tablero_view_v1';   // 'usuario' | 'coordinador' (última pantalla)
+const WELCOME_KEY = 'tablero_welcome_v1'; // bienvenida mostrada (solo la primera vez)
 // Código de acceso del coordinador (solo la organización). Cámbialo aquí.
 const ADMIN_CODE = 'acacio';
 
@@ -61,6 +62,7 @@ export default function Page() {
   const [coord, setCoord] = useState({ name: COORD_NAME, phone: COORD_PHONE }); // contacto del coordinador (editable)
   const [editProfile, setEditProfile] = useState(false);
   const [editCoord, setEditCoord] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false); // bienvenida (primera vez)
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminGate, setAdminGate] = useState(false);
   const [toasts, setToasts] = useState([]);
@@ -92,6 +94,7 @@ export default function Page() {
         const savedView = localStorage.getItem(VIEW_KEY);
         if (savedView === 'coordinador' && admin) setRole('coordinador');
         else if (saved) setRole('usuario');
+        if (!localStorage.getItem(WELCOME_KEY)) setShowWelcome(true); // primera visita
       } catch {}
       setReady(true);
     })();
@@ -264,6 +267,7 @@ export default function Page() {
         </div>
       )}
 
+      {showWelcome && <WelcomeModal onClose={() => { try { localStorage.setItem(WELCOME_KEY, '1'); } catch {} setShowWelcome(false); }} />}
       {editProfile && user && <EditProfileModal user={user} onClose={() => setEditProfile(false)} onSave={saveProfile} />}
       {editCoord && <CoordContactModal coord={coord} onClose={() => setEditCoord(false)} onSave={saveCoord} />}
 
@@ -332,6 +336,30 @@ function RoleLanding({ onPick, isAdmin, onCoordinator }) {
         </button>
       </div>
     </section>
+  );
+}
+
+// Bienvenida — se muestra solo la PRIMERA vez. Explica objetivo y cómo funciona.
+function WelcomeModal({ onClose }) {
+  return (
+    <div className="modal-bg show" onClick={(e) => { if (e.target.classList.contains('modal-bg')) onClose(); }}>
+      <div className="modal welcome" role="dialog" aria-modal="true">
+        <div className="wel-flag"><i className="y" /><i className="b" /><i className="r" /></div>
+        <div className="wel-eyebrow">🇻🇪 Tarea: Venezuela</div>
+        <h3>Ayuda organizada en la emergencia</h3>
+        <p className="wel-goal">
+          Conectamos a quienes <b>necesitan ayuda</b> con quienes <b>pueden darla</b>, de forma
+          coordinada — para que la respuesta sea rápida, ordenada y sin esfuerzos duplicados.
+        </p>
+        <ul className="wel-steps">
+          <li><span className="ic">🙋</span><div><b>Ayuda como voluntario</b><span>Mira las tareas cerca de ti y toma la que puedas cumplir. Verás su estado y el contacto.</span></div></li>
+          <li><span className="ic">📢</span><div><b>Reporta una necesidad</b><span>¿Viste algo que requiere apoyo? Repórtalo y la coordinación lo convierte en una tarea.</span></div></li>
+          <li><span className="ic">🧭</span><div><b>La coordinación organiza</b><span>Un equipo central verifica y prioriza todo para evitar caos y duplicados.</span></div></li>
+        </ul>
+        <p className="wel-note">Sé responsable: detrás de cada tarea hay <b>personas reales</b>. <b className="hd-strong">Venezuela nos necesita.</b></p>
+        <button className="btn btn-take btn-block" onClick={onClose}>Entendido, empezar →</button>
+      </div>
+    </div>
   );
 }
 
