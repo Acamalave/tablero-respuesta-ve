@@ -14,6 +14,17 @@ function intlNumber(phone) {
   return d;
 }
 
+// Mensaje predeterminado de WhatsApp: el voluntario se anuncia con su nombre
+// y lo que va a hacer (la tarea), poniéndose en contacto con quien reportó.
+function waText(t, mine) {
+  const yo = (mine && mine.name) || 'un voluntario';
+  const a = t.reporterName ? `Hola ${t.reporterName}, ` : 'Hola, ';
+  const msg = `${a}soy ${yo}, voluntario del Tablero de Respuesta VE. ` +
+    `Tomé tu reporte y voy a ayudar con: "${t.title}"${t.loc ? ` (${t.loc})` : ''}. ` +
+    `Me pongo en contacto contigo para coordinar.`;
+  return encodeURIComponent(msg);
+}
+
 const PRIO_HEX = { alta: '#e11d48', media: '#d97706', baja: '#0d9a6c' };
 const PHASES = [
   { key: 'tomada', lab: 'Tomada' },
@@ -65,7 +76,7 @@ export default function MyTaskCard({ t, mine, online, contact, h, i = 0 }) {
             <div className="contact-who">📣 Reportado por <b>{t.reporterName || 'un ciudadano'}</b> · ponte en contacto:</div>
             <div className="contact-actions">
               <a className="btn btn-primary btn-sm" href={`tel:+${intlNumber(t.reporterPhone)}`}>📞 Llamar</a>
-              <a className="btn btn-wa btn-sm" href={`https://wa.me/${intlNumber(t.reporterPhone)}`} target="_blank" rel="noopener noreferrer">💬 WhatsApp</a>
+              <a className="btn btn-wa btn-sm" href={`https://wa.me/${intlNumber(t.reporterPhone)}?text=${waText(t, mine)}`} target="_blank" rel="noopener noreferrer">💬 WhatsApp</a>
             </div>
           </div>
         ) : (

@@ -92,6 +92,11 @@ export default function Page() {
   useEffect(() => { if (role) { try { localStorage.setItem(VIEW_KEY, role); } catch {} } }, [role]);
   useEffect(() => { try { localStorage.setItem(MODE_KEY, mode); } catch {} }, [mode]);
 
+  // Móvil: vuelve al tope al cambiar de pantalla / pestaña / aceptar tarea / registrarse.
+  useEffect(() => {
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [role, mode, volTab, coordTab, user, ready]);
+
   const counters = { done: me.done || 0, reports: me.reports || 0 };
 
   // Carga bajo demanda según la pantalla activa (lee solo lo necesario).

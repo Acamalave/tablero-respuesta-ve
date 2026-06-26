@@ -6,14 +6,19 @@ export const metadata = {
     'Tablero vivo de coordinación de tareas para la respuesta al terremoto. La organización coordina; la gente toma tareas.',
   manifest: '/manifest.webmanifest',
   applicationName: 'Respuesta VE',
-  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Respuesta VE' },
+  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Respuesta VE' },
   icons: { icon: '/icons/icon.svg', apple: '/icons/icon.svg' },
+  formatDetection: { telephone: false },
 };
 
+// Bloquea el zoom (sensación de app nativa) + tema claro.
 export const viewport = {
-  themeColor: '#05070d',
+  themeColor: '#eef2f8',
   width: 'device-width',
   initialScale: 1,
+  maximumScale: 1,
+  minimumScale: 1,
+  userScalable: false,
   viewportFit: 'cover',
 };
 
