@@ -1158,7 +1158,10 @@ function ExampleBoard() {
   return (
     <div className="examples">
       <div className="ex-note">
-        <b>Aún no hay tareas publicadas.</b> Así se verán cuando la coordinación cargue necesidades reales — y esto es lo que <b>tú puedes reportar</b> si lo ves a tu alrededor:
+        <span className="ex-ic">🔎</span>
+        <div>
+          <b>Estas tarjetas son solo ejemplos</b>, para que veas cómo se verán las tareas. Estamos <b>verificando necesidades reales cerca de ti</b> — aparecerán aquí muy pronto. Mientras tanto, si ves algo que requiere ayuda, <b>repórtalo</b> 📢.
+        </div>
       </div>
       <div className="task-grid">
         {EXAMPLE_TASKS.map((e, i) => (
