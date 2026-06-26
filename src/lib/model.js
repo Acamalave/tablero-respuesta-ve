@@ -33,6 +33,7 @@ export const SKILLS = {
   medico:         { label: 'Atención médica',        icon: '🏥' },
   psicologico:    { label: 'Apoyo emocional',        icon: '🧠' },
   cuidado:        { label: 'Cuidado de personas',    icon: '👶' },
+  mascotas:       { label: 'Rescate / cuidado de mascotas', icon: '🐾' },
   comunicaciones: { label: 'Comunicaciones',         icon: '📡' },
   refugio:        { label: 'Refugio / alojamiento',  icon: '🏠' },
   logistica:      { label: 'Logística',              icon: '📦' },
