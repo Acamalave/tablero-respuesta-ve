@@ -8,7 +8,7 @@ import { db, auth } from './firebase';
 import { signInAnonymously } from 'firebase/auth';
 import {
   collection, doc, onSnapshot, runTransaction, updateDoc, setDoc,
-  getDocs, query, writeBatch, enableNetwork, disableNetwork, increment,
+  getDocsFromServer, query, writeBatch, enableNetwork, disableNetwork, increment,
 } from 'firebase/firestore';
 
 const TASKS = collection(db, 'tasks');
@@ -136,7 +136,9 @@ export const setReportStatus = (id, status) => updateDoc(doc(REPORTS, id), { sta
 
 /* ----- Semilla (solo si está vacío) ----- */
 export async function seedIfEmpty() {
-  const existing = await getDocs(query(TASKS));
+  // Consulta el SERVIDOR (no la caché local) para no resembrar sobre datos viejos.
+  let existing;
+  try { existing = await getDocsFromServer(query(TASKS)); } catch { return false; }
   if (!existing.empty) return false;
   const now = Date.now(), min = 60 * 1000;
   const batch = writeBatch(db);
