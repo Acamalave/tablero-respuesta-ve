@@ -113,13 +113,18 @@ export const cyclePrio = (taskId, current) =>
 export const cancelTask = (taskId) => updateDoc(doc(TASKS, taskId), { status: 'cancelada' });
 
 /* ----- Voluntarios ----- */
+// Perfil unificado del usuario (vale para voluntario y/o reportante).
 export async function upsertVolunteer(v) {
-  const data = { name: v.name, zone: v.zone, skills: v.skills || [] };
-  if (typeof v.done === 'number') data.done = v.done; // solo en el registro; no pisa el aporte al recargar
+  const data = { name: v.name, zone: v.zone || null, skills: v.skills || [], phone: v.phone || '', cedula: v.cedula || '' };
+  // done/reports solo se escriben en el registro; no se pisan al recargar/sincronizar.
+  if (typeof v.done === 'number') data.done = v.done;
+  if (typeof v.reports === 'number') data.reports = v.reports;
   await setDoc(doc(VOLS, v.uid), data, { merge: true });
 }
 export const bumpVolunteerDone = (uid) =>
   updateDoc(doc(VOLS, uid), { done: increment(1) }).catch(() => {});
+export const bumpReports = (uid) =>
+  updateDoc(doc(VOLS, uid), { reports: increment(1) }).catch(() => {});
 
 /* ----- Reportes ----- */
 export async function createReport(data) {
@@ -129,6 +134,10 @@ export async function createReport(data) {
     loc: data.loc || 'Sin ubicación precisa',
     zone: data.zone || 'caracas',
     note: data.note || '',
+    reporterUid: data.uid || null,
+    reporterName: data.reporterName || '',
+    reporterPhone: data.reporterPhone || '',
+    reporterCedula: data.reporterCedula || '',
     created: Date.now(),
     status: 'pendiente',
   });

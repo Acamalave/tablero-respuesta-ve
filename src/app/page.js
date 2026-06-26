@@ -1,7 +1,8 @@
 'use client';
 /* =====================================================================
    TABLERO DE RESPUESTA · VE — App principal (Next.js + Firebase)
-   Tiempo real con Firestore. La organización coordina; la gente toma.
+   Perfil unificado: una persona (nombre, teléfono, cédula) puede AYUDAR
+   como voluntario y/o REPORTAR. El perfil es el mismo y cuenta ambas.
    ===================================================================== */
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import Flag from './components/Flag';
@@ -14,31 +15,30 @@ import {
 } from '@/lib/model';
 import * as store from '@/lib/store';
 
-const VOL_KEY = 'tablero_vol_v1';
+const USER_KEY = 'tablero_user_v1';
 const ADMIN_KEY = 'tablero_admin_v1';
 // Código de acceso del coordinador (solo la organización). Cámbialo aquí.
-// Nota: es una compuerta de demo del lado del cliente; en producción usar
-// Firebase Auth con custom claims por rol.
 const ADMIN_CODE = 'acacio';
 
-// Solo dos roles públicos: el coordinador es acceso de administrador.
+// Dos tarjetas de entrada; ambas usan el MISMO perfil unificado.
 const ROLES = [
   { key: 'voluntario', icon: '🙋', title: 'Voluntario', desc: 'Veo tareas abiertas cerca de mí y tomo la que puedo hacer.', rc: '#E0A800', rcbg: '#fef6da', go: 'Quiero ayudar' },
-  { key: 'reportante', icon: '📢', title: 'Reportar', desc: 'Aviso de una necesidad. Sin cuenta; la organización la revisa.', rc: '#E4002B', rcbg: '#ffeef1', go: 'Reportar algo' },
+  { key: 'reportante', icon: '📢', title: 'Reportar', desc: 'Aviso de una necesidad para que la organización la atienda.', rc: '#E4002B', rcbg: '#ffeef1', go: 'Reportar algo' },
 ];
 
 export default function Page() {
   const [ready, setReady] = useState(false);
   const [uid, setUid] = useState(null);
-  const [role, setRole] = useState(null);          // null → pantalla de selección
+  const [role, setRole] = useState(null);          // null | 'coordinador' | 'usuario'
+  const [mode, setMode] = useState('voluntario');  // 'voluntario' | 'reportante'
   const [tasks, setTasks] = useState([]);
   const [reports, setReports] = useState([]);
-  const [volunteers, setVolunteers] = useState([]);
+  const [users, setUsers] = useState([]);
   const [online, setOnline] = useState(true);
   const [fromCache, setFromCache] = useState(false);
   const [coordTab, setCoordTab] = useState('tablero');
   const [volTab, setVolTab] = useState('tablero');
-  const [vol, setVol] = useState(null);
+  const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminGate, setAdminGate] = useState(false);
   const [toasts, setToasts] = useState([]);
@@ -60,10 +60,10 @@ export default function Page() {
       try { await store.seedIfEmpty(); } catch {}
       unsubs.push(store.subTasks((rows, meta) => { setTasks(rows); setFromCache(meta.fromCache); }));
       unsubs.push(store.subReports((rows) => setReports(rows)));
-      unsubs.push(store.subVolunteers((rows) => setVolunteers(rows)));
+      unsubs.push(store.subVolunteers((rows) => setUsers(rows)));
       try {
-        const saved = JSON.parse(localStorage.getItem(VOL_KEY) || 'null');
-        if (saved) { setVol({ ...saved, uid: myUid }); store.upsertVolunteer({ ...saved, uid: myUid }); }
+        const saved = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
+        if (saved) { setUser({ ...saved, uid: myUid }); store.upsertVolunteer({ ...saved, uid: myUid }); }
         if (localStorage.getItem(ADMIN_KEY) === '1') setIsAdmin(true);
       } catch {}
       setReady(true);
@@ -72,7 +72,9 @@ export default function Page() {
     return () => { unsubs.forEach((f) => f && f()); clearInterval(tick); };
   }, []);
 
-  const myDone = useMemo(() => volunteers.find((v) => v.id === uid)?.done ?? vol?.done ?? 0, [volunteers, uid, vol]);
+  // Contadores en vivo del perfil
+  const me = useMemo(() => users.find((v) => v.id === uid) || {}, [users, uid]);
+  const counters = { done: me.done || 0, reports: me.reports || 0 };
 
   async function toggleNet() {
     const next = !online;
@@ -84,23 +86,37 @@ export default function Page() {
   const h = {
     take: async (id) => {
       try {
-        const r = await store.takeTask(id, { name: vol.name, uid });
+        const r = await store.takeTask(id, { name: user.name, uid });
         if (r === 'ok') { setVolTab('mis'); pushToast('Tomaste esta tarea', 'La encuentras en "Mis tareas" con sus fases.', '✅', online ? 'Confirmado' : 'Pendiente'); }
       } catch (e) {
         if (String(e.message).includes('cupo')) pushToast('Cupo lleno', 'Otra persona tomó el último cupo.', '⚠️', 'Aviso');
       }
     },
     start: (id) => store.startTask(id, uid),
-    complete: async (id) => { await store.completeTask(id, uid); store.bumpVolunteerDone(uid); pushToast('¡Tarea completada!', 'Suma a tu aporte. Gracias por responder.', '🎉', 'Logrado'); },
+    complete: async (id) => { await store.completeTask(id, uid); store.bumpVolunteerDone(uid); pushToast('¡Tarea completada!', 'Suma a tus ayudas. Gracias por responder.', '🎉', 'Logrado'); },
     release: async (id) => { await store.releaseTask(id, uid); pushToast('Tarea liberada', 'Vuelve a estar disponible para otro voluntario.', '↩️', 'Aviso'); },
     cyclePrio: (id, cur) => store.cyclePrio(id, cur),
     cancel: async (id) => { await store.cancelTask(id); pushToast('Tarea cerrada', 'Salió del tablero activo.', '🗑️', 'Coordinador'); },
   };
 
+  const sendReport = async (data) => {
+    await store.createReport({ ...data, uid, reporterName: user.name, reporterPhone: user.phone, reporterCedula: user.cedula });
+    store.bumpReports(uid);
+    pushToast('Reporte enviado', 'Un coordinador lo revisará pronto. Gracias por avisar.', '📨', 'Reporte');
+  };
+
+  const register = (profile) => {
+    try { localStorage.setItem(USER_KEY, JSON.stringify(profile)); } catch {}
+    const full = { ...profile, uid };
+    setUser(full);
+    store.upsertVolunteer({ ...full, done: 0, reports: 0 });
+    pushToast('¡Perfil creado!', 'Ya puedes ayudar y reportar con el mismo perfil.', '🙌', 'Bienvenido');
+  };
+
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand" onClick={() => setRole(null)} title="Volver a elegir rol">
+        <div className="brand" onClick={() => setRole(null)} title="Volver al inicio">
           <span className="flag"><Flag size={40} /></span>
           <div className="brand-txt">
             <h1>TABLERO DE <b>RESPUESTA</b></h1>
@@ -108,9 +124,7 @@ export default function Page() {
           </div>
         </div>
         <div className="topbar-spacer" />
-        {role && (
-          <button className="role-back" onClick={() => setRole(null)}><span className="pin">⇆</span><span className="rb-text">Cambiar rol</span></button>
-        )}
+        {role && <button className="role-back" onClick={() => setRole(null)}><span className="pin">⇆</span><span className="rb-text">Inicio</span></button>}
         <button className={`netchip ${!online ? 'off' : fromCache ? 'syncing' : ''}`} onClick={toggleNet} title="Alternar conexión (offline-first)">
           <span className="dot" />
           <span>{online ? (fromCache ? 'Conectando' : 'En línea') : 'Sin red'}</span>
@@ -122,18 +136,16 @@ export default function Page() {
           <div className="boot"><div><div className="ring" /><div className="txt">Conectando con el tablero…</div></div></div>
         ) : !role ? (
           <RoleLanding
-            onPick={(r) => { setRole(r); setVolTab('tablero'); }}
+            onPick={(r) => { setRole('usuario'); setMode(r); setVolTab('tablero'); }}
             isAdmin={isAdmin}
             onCoordinator={() => { if (isAdmin) { setRole('coordinador'); setCoordTab('tablero'); } else setAdminGate(true); }}
           />
         ) : role === 'coordinador' ? (
-          <Coordinador {...{ tasks, reports, volunteers, coordTab, setCoordTab, h, openCreate: (p) => setModal({ prefill: p || null }), onConvert: (r) => setModal({ prefill: r }), onDiscard: (id) => store.setReportStatus(id, 'descartado') }} />
-        ) : role === 'voluntario' ? (
-          vol
-            ? <Voluntario {...{ tasks, vol: { ...vol, uid, done: myDone }, online, volTab, setVolTab, h }} />
-            : <Onboarding onDone={(v) => { localStorage.setItem(VOL_KEY, JSON.stringify(v)); const full = { ...v, uid }; setVol(full); store.upsertVolunteer({ ...full, done: 0 }); pushToast('¡Listo!', 'Aquí están las tareas abiertas, ordenadas para ti.', '🙋', 'Voluntario'); }} />
+          <Coordinador {...{ tasks, reports, volunteers: users, coordTab, setCoordTab, h, openCreate: (p) => setModal({ prefill: p || null }), onConvert: (r) => setModal({ prefill: r }), onDiscard: (id) => store.setReportStatus(id, 'descartado') }} />
+        ) : user ? (
+          <Usuario {...{ user: { ...user, uid }, counters, mode, setMode, tasks, reports, uid, online, volTab, setVolTab, h, onSendReport: sendReport }} />
         ) : (
-          <Reportante reports={reports} onSend={async (data) => { await store.createReport(data); pushToast('Reporte enviado', 'Un coordinador lo revisará pronto. Gracias por avisar.', '📨', 'Reportante'); }} />
+          <Registro initialMode={mode} onDone={register} />
         )}
       </main>
 
@@ -164,7 +176,7 @@ export default function Page() {
 }
 
 /* ====================================================================
-   PANTALLA INICIAL — selección de rol (3 botones flotantes)
+   PANTALLA INICIAL — selección (2 íconos) + disclaimer al fondo
    ==================================================================== */
 function RoleLanding({ onPick, isAdmin, onCoordinator }) {
   return (
@@ -227,6 +239,181 @@ function AdminGate({ onClose, onOk }) {
 }
 
 /* ====================================================================
+   REGISTRO — perfil único (nombre, teléfono, cédula OBLIGATORIOS)
+   ==================================================================== */
+function Registro({ initialMode, onDone }) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [cedula, setCedula] = useState('');
+  const [skills, setSkills] = useState([]);
+  const [zone, setZone] = useState('');
+  const [touched, setTouched] = useState(false);
+
+  const nameOk = name.trim().length >= 2;
+  const phoneOk = phone.replace(/\D/g, '').length >= 7;
+  const cedulaOk = cedula.replace(/\D/g, '').length >= 6;
+  const valid = nameOk && phoneOk && cedulaOk;
+  const toggle = (k) => setSkills((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
+
+  return (
+    <section className="view onboard">
+      <div className="panel hero">
+        <h2>Crea tu <span>perfil</span></h2>
+        <p>{initialMode === 'reportante'
+          ? 'Para dar formalidad a tu reporte necesitamos tus datos. Con el mismo perfil también podrás ayudar como voluntario.'
+          : 'Para coordinar y poder confirmar contigo necesitamos tus datos. Con el mismo perfil podrás ayudar y reportar.'}</p>
+      </div>
+      <div className="panel" style={{ padding: 22, marginTop: 16 }}>
+        <div className="field">
+          <label>Nombre y apellido <span className="req">obligatorio</span></label>
+          <input className={`input ${touched && !nameOk ? 'invalid' : ''}`} value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Carlos Rodríguez" />
+        </div>
+        <div className="g2">
+          <div className="field">
+            <label>Teléfono <span className="req">obligatorio</span></label>
+            <input className={`input ${touched && !phoneOk ? 'invalid' : ''}`} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+58 412 1234567" inputMode="tel" />
+          </div>
+          <div className="field">
+            <label>Cédula <span className="req">obligatorio</span></label>
+            <input className={`input ${touched && !cedulaOk ? 'invalid' : ''}`} value={cedula} onChange={(e) => setCedula(e.target.value)} placeholder="V-12345678" inputMode="numeric" />
+          </div>
+        </div>
+        <div className="field">
+          <label>¿Qué puedes hacer? <span className="hint">opcional</span></label>
+          <div className="chips">{Object.entries(SKILLS).map(([k, s]) => (
+            <div key={k} className={`chip ${skills.includes(k) ? 'on' : ''}`} onClick={() => toggle(k)}><span>{s.icon}</span>{s.label}</div>
+          ))}</div>
+        </div>
+        <div className="field">
+          <label>Tu zona <span className="hint">opcional</span></label>
+          <select className="input" value={zone} onChange={(e) => setZone(e.target.value)}>
+            <option value="">📍 Elegir zona…</option>
+            {ZONE_KEYS.map((z) => <option key={z} value={z}>{ZONES[z].name} · {ZONES[z].sector}</option>)}
+          </select>
+        </div>
+        <button className="btn btn-take btn-block" style={{ marginTop: 8 }} disabled={!valid}
+          onClick={() => { setTouched(true); if (valid) onDone({ name: name.trim(), phone: phone.trim(), cedula: cedula.trim(), skills, zone: zone || 'caracas' }); }}>
+          {valid ? 'Crear perfil y entrar →' : 'Completa nombre, teléfono y cédula'}
+        </button>
+        <div className="demo-note">Tus datos dan formalidad al reporte y permiten que la organización confirme contigo.</div>
+      </div>
+    </section>
+  );
+}
+
+/* ====================================================================
+   USUARIO — perfil unificado con switch Ayudar / Reportar
+   ==================================================================== */
+function Usuario({ user, counters, mode, setMode, tasks, reports, uid, online, volTab, setVolTab, h, onSendReport }) {
+  return (
+    <section className="view">
+      <div className="panel vol-head">
+        <div className="ava">{avatarFor(user.name)}</div>
+        <div className="who"><b>{user.name}</b><span>📞 {user.phone} · 🪪 {user.cedula}</span></div>
+        <div className="prof-stats">
+          <div className="ps help"><b>{counters.done}</b><span>Ayudas</span></div>
+          <div className="ps rep"><b>{counters.reports}</b><span>Reportes</span></div>
+        </div>
+      </div>
+
+      <div className="subtabs mode-switch">
+        <button className={mode === 'voluntario' ? 'active' : ''} onClick={() => setMode('voluntario')}>🙋 Ayudar</button>
+        <button className={mode === 'reportante' ? 'active' : ''} onClick={() => setMode('reportante')}>📢 Reportar</button>
+      </div>
+
+      {mode === 'voluntario'
+        ? <VolunteerArea tasks={tasks} user={user} online={online} volTab={volTab} setVolTab={setVolTab} h={h} />
+        : <ReportArea reports={reports} uid={uid} onSend={onSendReport} onSwitch={() => setMode('voluntario')} />}
+    </section>
+  );
+}
+
+function VolunteerArea({ tasks, user, online, volTab, setVolTab, h }) {
+  const hasMine = (t) => (t.takenBy || []).some((x) => x.uid === user.uid && x.state !== 'soltada');
+
+  const board = useMemo(() => {
+    const ref = user.zone;
+    return tasks
+      .filter((t) => ['abierta', 'tomada', 'curso'].includes(taskState(t)) && !hasMine(t))
+      .map((t) => ({ t, proximity: ref ? dist(ref, t.zone) : 50, skillMatch: (user.skills || []).includes(t.skill) ? 0 : 1 }))
+      .sort((a, b) => PRIO_ORDER[a.t.prio] - PRIO_ORDER[b.t.prio] || a.proximity - b.proximity || a.skillMatch - b.skillMatch || b.t.created - a.t.created);
+  }, [tasks, user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const mine = useMemo(() => tasks
+    .map((t) => ({ t, mine: (t.takenBy || []).find((x) => x.uid === user.uid && x.state !== 'soltada') }))
+    .filter((o) => o.mine)
+    .sort((a, b) => (PHASE_ORDER[a.mine.state] - PHASE_ORDER[b.mine.state]) || b.t.created - a.t.created),
+  [tasks, user.uid]);
+
+  return (
+    <>
+      <div className="subtabs">
+        <button className={volTab === 'tablero' ? 'active' : ''} onClick={() => setVolTab('tablero')}>🗂️ Tareas abiertas <span className="count">{board.length}</span></button>
+        <button className={volTab === 'mis' ? 'active' : ''} onClick={() => setVolTab('mis')}>🎒 Mis tareas <span className="count">{mine.length}</span></button>
+      </div>
+      {volTab === 'tablero' ? (
+        <>
+          <div className="subtabs"><button className="static">↑ Ordenadas por prioridad · cercanía a {ZONES[user.zone]?.name || 'tu zona'} · tu habilidad</button></div>
+          {board.length
+            ? <div className="task-grid">{board.map((o, i) => <TaskCard key={o.t.id} t={o.t} mode="vol" i={i} h={h} />)}</div>
+            : <Empty title="Todo cubierto" sub="No hay tareas abiertas ahora mismo. Te avisaremos cuando surja una cerca de ti." />}
+        </>
+      ) : (
+        mine.length
+          ? <div className="task-grid">{mine.map((o, i) => <MyTaskCard key={o.t.id} t={o.t} mine={o.mine} online={online} contact={COORD_CONTACT} h={h} i={i} />)}</div>
+          : <Empty title="Aún no has tomado tareas" sub="Ve a “Tareas abiertas” y toma la que puedas hacer. Aparecerá aquí con sus fases." />
+      )}
+    </>
+  );
+}
+const PHASE_ORDER = { curso: 0, tomada: 1, completada: 2 };
+
+function ReportArea({ reports, uid, onSend, onSwitch }) {
+  const [need, setNeed] = useState('');
+  const [loc, setLoc] = useState('');
+  const [zone, setZone] = useState('');
+  const [note, setNote] = useState('');
+  const mine = [...reports].filter((r) => r.reporterUid === uid).sort((a, b) => b.created - a.created);
+
+  const submit = () => {
+    if (!need.trim()) return;
+    onSend({ need: need.trim(), loc: loc.trim(), zone: zone || 'caracas', note: note.trim() });
+    setNeed(''); setLoc(''); setZone(''); setNote('');
+  };
+
+  return (
+    <>
+      <div className="panel" style={{ padding: 22 }}>
+        <div className="field"><label>¿Qué hace falta? <span className="req">obligatorio</span></label><input className="input" value={need} onChange={(e) => setNeed(e.target.value)} placeholder="Ej. Falta agua potable en un refugio" /></div>
+        <div className="field"><label>¿Dónde?</label><input className="input" value={loc} onChange={(e) => setLoc(e.target.value)} placeholder="Ej. Sector La Pastora, Caracas" /></div>
+        <div className="field"><label>Zona <span className="hint">ayuda a priorizar</span></label>
+          <select className="input" value={zone} onChange={(e) => setZone(e.target.value)}>
+            <option value="">Elegir zona…</option>
+            {ZONE_KEYS.map((z) => <option key={z} value={z}>{ZONES[z].name} · {ZONES[z].sector}</option>)}
+          </select>
+        </div>
+        <div className="field"><label>Nota <span className="hint">opcional</span></label><textarea className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Detalles que ayuden al coordinador…" /></div>
+        <button className="btn btn-take btn-block" disabled={!need.trim()} onClick={submit}>📨 Enviar reporte</button>
+        <button className="btn btn-ghost btn-block" style={{ marginTop: 10 }} onClick={onSwitch}>🙋 Prefiero ayudar como voluntario</button>
+      </div>
+
+      {mine.length > 0 && (
+        <>
+          <div className="section-head"><span className="kicker">Mis reportes</span><h2 style={{ fontSize: 16 }}>Enviados</h2><div className="rule" /></div>
+          <div>{mine.map((r) => (
+            <div className="panel report-item" key={r.id}>
+              <div className="ri">{r.status === 'convertido' ? '✅' : r.status === 'descartado' ? '⚪' : '🕓'}</div>
+              <div className="rc"><b>{r.need}</b><div className="rl">📍 {r.loc}</div>
+                <div className="rs">{r.status === 'convertido' ? 'Convertido en tarea' : r.status === 'descartado' ? 'Descartado' : 'En revisión'} · {ago(r.created)}</div></div>
+            </div>
+          ))}</div>
+        </>
+      )}
+    </>
+  );
+}
+
+/* ====================================================================
    COORDINADOR
    ==================================================================== */
 function Coordinador({ tasks, reports, volunteers, coordTab, setCoordTab, h, openCreate, onConvert, onDiscard }) {
@@ -248,7 +435,7 @@ function Coordinador({ tasks, reports, volunteers, coordTab, setCoordTab, h, ope
         <Stat n={pend} l="Por revisar" a="var(--ve-red)" />
       </div>
       <div className="subtabs">
-        {[['tablero', '🗂️ Tablero'], ['voluntarios', '👥 Voluntarios'], ['mapa', '🗺️ Mapa'], ['reportes', '📥 Reportes']].map(([k, lbl]) => (
+        {[['tablero', '🗂️ Tablero'], ['voluntarios', '👥 Personas'], ['mapa', '🗺️ Mapa'], ['reportes', '📥 Reportes']].map(([k, lbl]) => (
           <button key={k} className={coordTab === k ? 'active' : ''} onClick={() => setCoordTab(k)}>
             {lbl}{k === 'voluntarios' && <span className="count">{volunteers.length}</span>}{k === 'reportes' && <span className="count">{pend}</span>}
           </button>
@@ -285,7 +472,7 @@ function CoordBoard({ tasks, h }) {
 }
 
 function Roster({ volunteers }) {
-  if (!volunteers.length) return <Empty title="Sin voluntarios aún" sub="Aparecerán al registrarse." />;
+  if (!volunteers.length) return <Empty title="Sin personas aún" sub="Aparecerán al registrarse." />;
   return (
     <div className="roster">
       {volunteers.map((v) => (
@@ -293,10 +480,10 @@ function Roster({ volunteers }) {
           <div className="av">{avatarFor(v.name)}</div>
           <div>
             <div className="vn">{v.name}</div>
-            <div className="vt">📍 {ZONES[v.zone]?.name || '—'}</div>
+            <div className="vt">📍 {ZONES[v.zone]?.name || '—'}{v.cedula ? ` · 🪪 ${v.cedula}` : ''}</div>
             <div className="vsk">{(v.skills || []).map((s) => <i key={s} title={SKILLS[s]?.label}>{SKILLS[s]?.icon}</i>)}</div>
           </div>
-          <div className="vct"><b>{v.done ?? 0}</b><span>aportes</span></div>
+          <div className="vct"><b>{v.done ?? 0}</b><span>ayudas</span></div>
         </div>
       ))}
     </div>
@@ -313,9 +500,9 @@ function Inbox({ reports, onConvert, onDiscard }) {
           <div className="ri">📢</div>
           <div className="rc">
             <b>{r.need}</b>
-            <div className="rl">📍 {r.loc}{r.contact ? ` · ${r.contact}` : ''}</div>
+            <div className="rl">📍 {r.loc}</div>
             {r.note && <div className="rn">“{r.note}”</div>}
-            <div className="rs">Reportado {ago(r.created)} · zona: {ZONES[r.zone]?.name || 'sin definir'}</div>
+            <div className="rs">{r.reporterName ? `Por ${r.reporterName}${r.reporterPhone ? ` · ${r.reporterPhone}` : ''}${r.reporterCedula ? ` · 🪪 ${r.reporterCedula}` : ''} · ` : ''}{ago(r.created)} · zona: {ZONES[r.zone]?.name || 'sin definir'}</div>
           </div>
           <div className="ra">
             <button className="btn btn-take btn-sm" onClick={() => onConvert(r)}>✓ Convertir en tarea</button>
@@ -324,149 +511,6 @@ function Inbox({ reports, onConvert, onDiscard }) {
         </div>
       ))}
     </div>
-  );
-}
-
-/* ====================================================================
-   VOLUNTARIO  —  Tablero + Mis tareas (con fases)
-   ==================================================================== */
-function Voluntario({ tasks, vol, online, volTab, setVolTab, h }) {
-  const hasMine = (t) => (t.takenBy || []).some((x) => x.uid === vol.uid && x.state !== 'soltada');
-
-  const board = useMemo(() => {
-    const ref = vol.zone;
-    return tasks
-      .filter((t) => ['abierta', 'tomada', 'curso'].includes(taskState(t)) && !hasMine(t))
-      .map((t) => ({ t, proximity: ref ? dist(ref, t.zone) : 50, skillMatch: (vol.skills || []).includes(t.skill) ? 0 : 1 }))
-      .sort((a, b) => PRIO_ORDER[a.t.prio] - PRIO_ORDER[b.t.prio] || a.proximity - b.proximity || a.skillMatch - b.skillMatch || b.t.created - a.t.created);
-  }, [tasks, vol]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const mine = useMemo(() => tasks
-    .map((t) => ({ t, mine: (t.takenBy || []).find((x) => x.uid === vol.uid && x.state !== 'soltada') }))
-    .filter((o) => o.mine)
-    .sort((a, b) => (IDX_ORDER[a.mine.state] - IDX_ORDER[b.mine.state]) || b.t.created - a.t.created),
-  [tasks, vol.uid]);
-
-  return (
-    <section className="view">
-      <div className="panel vol-head">
-        <div className="ava">{avatarFor(vol.name)}</div>
-        <div className="who"><b>{vol.name}</b><span>📞 {vol.phone || '—'} · 📍 {ZONES[vol.zone]?.name || 'Sin zona'}</span></div>
-        <div className="aporte"><b>{vol.done ?? 0}</b><span>mi aporte</span></div>
-      </div>
-
-      <div className="subtabs">
-        <button className={volTab === 'tablero' ? 'active' : ''} onClick={() => setVolTab('tablero')}>🗂️ Tareas abiertas <span className="count">{board.length}</span></button>
-        <button className={volTab === 'mis' ? 'active' : ''} onClick={() => setVolTab('mis')}>🎒 Mis tareas <span className="count">{mine.length}</span></button>
-      </div>
-
-      {volTab === 'tablero' ? (
-        <>
-          <div className="subtabs"><button className="static">↑ Ordenadas por prioridad · cercanía a {ZONES[vol.zone]?.name || 'tu zona'} · tu habilidad</button></div>
-          {board.length
-            ? <div className="task-grid">{board.map((o, i) => <TaskCard key={o.t.id} t={o.t} mode="vol" i={i} h={h} />)}</div>
-            : <Empty title="Todo cubierto" sub="No hay tareas abiertas ahora mismo. Te avisaremos cuando surja una cerca de ti." />}
-        </>
-      ) : (
-        mine.length
-          ? <div className="task-grid">{mine.map((o, i) => <MyTaskCard key={o.t.id} t={o.t} mine={o.mine} online={online} contact={COORD_CONTACT} h={h} i={i} />)}</div>
-          : <Empty title="Aún no has tomado tareas" sub="Ve a “Tareas abiertas” y toma la que puedas hacer. Aparecerá aquí con sus fases." />
-      )}
-    </section>
-  );
-}
-const IDX_ORDER = { curso: 0, tomada: 1, completada: 2 };
-
-function Onboarding({ onDone }) {
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [skills, setSkills] = useState([]);
-  const [zone, setZone] = useState('');
-  const [touched, setTouched] = useState(false);
-
-  const digits = phone.replace(/\D/g, '');
-  const nameOk = name.trim().length >= 2;
-  const phoneOk = digits.length >= 7;
-  const valid = nameOk && phoneOk;
-  const toggle = (k) => setSkills((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
-
-  return (
-    <section className="view onboard">
-      <div className="panel hero">
-        <h2>Quiero <span>ayudar</span></h2>
-        <p>Para coordinar y poder confirmar contigo, necesitamos tu nombre y teléfono. Toma menos de un minuto.</p>
-      </div>
-      <div className="panel" style={{ padding: 22, marginTop: 16 }}>
-        <div className="field">
-          <label>Nombre o alias <span className="req">obligatorio</span></label>
-          <input className={`input ${touched && !nameOk ? 'invalid' : ''}`} value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Carlos Rodríguez" />
-        </div>
-        <div className="field">
-          <label>Teléfono <span className="req">obligatorio</span><span className="hint">para confirmar contigo</span></label>
-          <input className={`input ${touched && !phoneOk ? 'invalid' : ''}`} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+58 412 1234567" inputMode="tel" />
-        </div>
-        <div className="field">
-          <label>¿Qué puedes hacer? <span className="hint">opcional</span></label>
-          <div className="chips">{Object.entries(SKILLS).map(([k, s]) => (
-            <div key={k} className={`chip ${skills.includes(k) ? 'on' : ''}`} onClick={() => toggle(k)}><span>{s.icon}</span>{s.label}</div>
-          ))}</div>
-        </div>
-        <div className="field">
-          <label>Tu zona <span className="hint">opcional</span></label>
-          <select className="input" value={zone} onChange={(e) => setZone(e.target.value)}>
-            <option value="">📍 Elegir zona…</option>
-            {ZONE_KEYS.map((z) => <option key={z} value={z}>{ZONES[z].name} · {ZONES[z].sector}</option>)}
-          </select>
-        </div>
-        <button className="btn btn-take btn-block" style={{ marginTop: 8 }} disabled={!valid}
-          onClick={() => { setTouched(true); if (valid) onDone({ name: name.trim(), phone: phone.trim(), skills, zone: zone || 'caracas' }); }}>
-          {valid ? 'Entrar al tablero →' : 'Completa nombre y teléfono'}
-        </button>
-      </div>
-    </section>
-  );
-}
-
-/* ====================================================================
-   REPORTANTE
-   ==================================================================== */
-function Reportante({ reports, onSend }) {
-  const [need, setNeed] = useState('');
-  const [loc, setLoc] = useState('');
-  const [zone, setZone] = useState('');
-  const [note, setNote] = useState('');
-  const recent = [...reports].sort((a, b) => b.created - a.created).slice(0, 4);
-  return (
-    <section className="view onboard">
-      <div className="panel hero">
-        <h2>Reportar una <span style={{ color: 'var(--ve-red)' }}>necesidad</span></h2>
-        <p>No necesitas cuenta. Cuéntanos qué hace falta y dónde; un coordinador lo revisa y lo convierte en tarea.</p>
-      </div>
-      <div className="panel" style={{ padding: 22, marginTop: 16 }}>
-        <div className="field"><label>¿Qué hace falta?</label><input className="input" value={need} onChange={(e) => setNeed(e.target.value)} placeholder="Ej. Falta agua potable en un refugio" /></div>
-        <div className="field"><label>¿Dónde?</label><input className="input" value={loc} onChange={(e) => setLoc(e.target.value)} placeholder="Ej. Sector La Pastora, Caracas" /></div>
-        <div className="field"><label>Zona <span className="hint">ayuda a priorizar</span></label>
-          <select className="input" value={zone} onChange={(e) => setZone(e.target.value)}>
-            <option value="">Elegir zona…</option>
-            {ZONE_KEYS.map((z) => <option key={z} value={z}>{ZONES[z].name} · {ZONES[z].sector}</option>)}
-          </select>
-        </div>
-        <div className="field"><label>Nota <span className="hint">opcional</span></label><textarea className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Detalles que ayuden al coordinador…" /></div>
-        <button className="btn btn-take btn-block" disabled={!need.trim()} onClick={() => { if (!need.trim()) return; onSend({ need: need.trim(), loc: loc.trim(), zone: zone || 'caracas', note: note.trim() }); setNeed(''); setLoc(''); setZone(''); setNote(''); }}>📨 Enviar reporte</button>
-      </div>
-      {recent.length > 0 && (
-        <>
-          <div className="section-head"><span className="kicker">Avisos recientes</span><h2 style={{ fontSize: 15 }}>En el sistema</h2><div className="rule" /></div>
-          <div>{recent.map((r) => (
-            <div className="panel report-item" key={r.id}>
-              <div className="ri">{r.status === 'convertido' ? '✅' : r.status === 'descartado' ? '⚪' : '🕓'}</div>
-              <div className="rc"><b>{r.need}</b><div className="rl">📍 {r.loc}</div>
-                <div className="rs">{r.status === 'convertido' ? 'Convertido en tarea' : r.status === 'descartado' ? 'Descartado' : 'En revisión'} · {ago(r.created)}</div></div>
-            </div>
-          ))}</div>
-        </>
-      )}
-    </section>
   );
 }
 
