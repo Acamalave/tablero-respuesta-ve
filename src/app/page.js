@@ -34,7 +34,9 @@ export default function Page() {
   const [ready, setReady] = useState(false);
   const [uid, setUid] = useState(null);
   const [role, setRole] = useState(null);          // null | 'coordinador' | 'usuario'
-  const [mode, setMode] = useState('voluntario');  // 'voluntario' | 'reportante'
+  const [mode, setMode] = useState(() => {         // 'voluntario' | 'reportante' (recordado)
+    try { return localStorage.getItem(MODE_KEY) || 'voluntario'; } catch { return 'voluntario'; }
+  });
   const [tasks, setTasks] = useState([]);          // página del tablero (tareas activas)
   const [boardLast, setBoardLast] = useState(null); // cursor de paginación
   const [boardMore, setBoardMore] = useState(false);
@@ -75,8 +77,6 @@ export default function Page() {
         const saved = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
         const admin = localStorage.getItem(ADMIN_KEY) === '1';
         if (admin) setIsAdmin(true);
-        const savedMode = localStorage.getItem(MODE_KEY);
-        if (savedMode) setMode(savedMode);
         if (saved) { setUser({ ...saved, uid: myUid }); store.upsertVolunteer({ ...saved, uid: myUid }); }
         const savedView = localStorage.getItem(VIEW_KEY);
         if (savedView === 'coordinador' && admin) setRole('coordinador');
@@ -174,10 +174,11 @@ export default function Page() {
   };
 
   const sendReport = async (data) => {
-    await store.createReport({ ...data, uid, reporterName: user.name, reporterPhone: user.phone, reporterCedula: user.cedula });
+    const id = await store.createReport({ ...data, uid, reporterName: user.name, reporterPhone: user.phone, reporterCedula: user.cedula });
     await store.bumpReports(uid);
     await refresh();
-    pushToast('Reporte enviado', 'Un coordinador lo revisará pronto. Gracias por avisar.', '📨', 'Reporte');
+    pushToast('Reporte enviado', 'Un coordinador lo está verificando.', '📨', 'Reporte');
+    return id;
   };
 
   const register = async (profile) => {
@@ -196,7 +197,7 @@ export default function Page() {
           <span className="flag"><Flag size={40} /></span>
           <div className="brand-txt">
             <h1>TAREA: <b>VENEZUELA</b></h1>
-            <span>Coordinación de respuesta</span>
+            <span>Coordinación de tareas</span>
           </div>
         </div>
         <div className="topbar-spacer" />
@@ -506,6 +507,8 @@ function VolunteerArea({ tasks, myTasks, boardMore, loadMore, user, online, volT
 }
 const PHASE_ORDER = { curso: 0, tomada: 1, completada: 2 };
 
+const REPORT_KEY = 'tablero_lastreport_v1';
+
 function ReportArea({ myReports, onSend, onSwitch, userPos, requestGeo }) {
   const [need, setNeed] = useState('');
   const [loc, setLoc] = useState('');
@@ -513,7 +516,16 @@ function ReportArea({ myReports, onSend, onSwitch, userPos, requestGeo }) {
   const [coords, setCoords] = useState(null);   // {lat,lng} si marca su ubicación exacta
   const [note, setNote] = useState('');
   const [geoMsg, setGeoMsg] = useState('');
+  const [sentId, setSentId] = useState(() => { try { return localStorage.getItem(REPORT_KEY) || null; } catch { return null; } });
+  const [sentReport, setSentReport] = useState(null);
   const mine = [...(myReports || [])];
+
+  // Tiempo real del reporte enviado: el ciudadano ve cuándo es evaluado.
+  useEffect(() => {
+    if (!sentId) { setSentReport(null); return undefined; }
+    const unsub = store.subReport(sentId, (d) => setSentReport(d));
+    return () => unsub && unsub();
+  }, [sentId]);
 
   const nearestZone = (lat, lng) => {
     let best = null, bestKm = Infinity;
@@ -530,11 +542,38 @@ function ReportArea({ myReports, onSend, onSwitch, userPos, requestGeo }) {
     if (requestGeo) requestGeo();
   };
 
-  const submit = () => {
+  const submit = async () => {
     if (!need.trim()) return;
-    onSend({ need: need.trim(), loc: loc.trim(), zone: zone || 'caracas', note: note.trim(), lat: coords?.lat ?? null, lng: coords?.lng ?? null });
+    const id = await onSend({ need: need.trim(), loc: loc.trim(), zone: zone || 'caracas', note: note.trim(), lat: coords?.lat ?? null, lng: coords?.lng ?? null });
     setNeed(''); setLoc(''); setZone(''); setCoords(null); setNote(''); setGeoMsg('');
+    if (id) { setSentId(id); try { localStorage.setItem(REPORT_KEY, id); } catch {} }
   };
+
+  const reportAnother = () => { setSentId(null); try { localStorage.removeItem(REPORT_KEY); } catch {} };
+
+  // Pantalla de verificación: se mantiene hasta que el coordinador la evalúe.
+  if (sentId) {
+    const r = sentReport;
+    const status = r?.status || 'pendiente';
+    const pend = status === 'pendiente';
+    const ok = status === 'convertido';
+    return (
+      <div className="panel verify">
+        {pend ? <div className="ring" /> : <div className="verify-ic">{ok ? '✅' : '⚪'}</div>}
+        <h2>{pend ? 'Verificando tu reporte' : ok ? '¡Reporte aprobado!' : 'Reporte revisado'}</h2>
+        <p>{pend
+          ? 'Un coordinador está revisando la información. En cuanto la evalúe, lo verás aquí mismo. Gracias por avisar con responsabilidad.'
+          : ok
+            ? 'Tu reporte se convirtió en una tarea para los voluntarios. ¡Gracias por avisar!'
+            : 'El coordinador revisó tu reporte y no lo convirtió en tarea esta vez. Puedes reportar otro caso.'}</p>
+        {r && <div className="verify-card"><b>{r.need}</b><span>📍 {r.loc} · {ago(r.created)}</span></div>}
+        <div className="verify-actions">
+          <button className="btn btn-take" onClick={reportAnother}>📢 Reportar otro caso</button>
+          <button className="btn btn-ghost" onClick={onSwitch}>🙋 Cambiar a voluntario</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>

@@ -81,6 +81,10 @@ export async function fetchBoard(after = null) {
 export const subTask = (id, cb) =>
   onSnapshot(doc(TASKS, id), (s) => cb(s.exists() ? row(s) : null), () => cb(null));
 
+// Tiempo real de UN reporte (para mostrar al ciudadano si ya fue evaluado).
+export const subReport = (id, cb) =>
+  onSnapshot(doc(REPORTS, id), (s) => cb(s.exists() ? row(s) : null), () => cb(null));
+
 // "Mis tareas": solo las del usuario (array-contains) — no escanea el tablero.
 export async function fetchMyTasks(uid) {
   if (!uid) return [];
