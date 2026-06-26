@@ -393,6 +393,14 @@ textarea.input { resize: vertical; min-height: 84px; }
 .stepper .link.on { background: var(--ve-blue); }
 .stepper .stp.completed .dot { border-color: var(--p-baja); background: var(--p-baja); }
 
+/* "Mis tareas" sin mapa: skill compacto + ESTADO protagonista */
+.mytask .skill-line { margin-bottom: 2px; }
+.mytask .status-block { margin-top: 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px; padding: 16px 12px 14px; }
+.mytask .status-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-faint); text-align: center; margin-bottom: 14px; }
+.stepper.big .dot { width: 34px; height: 34px; font-size: 15px; }
+.stepper.big .stp .lab { font-size: 13px; font-weight: 700; }
+.stepper.big .link { margin-top: 17px; }
+
 .mytask .acts { display: flex; gap: 9px; margin-top: 16px; }
 .mytask .acts .btn { flex: 1; }
 .mytask .contact { margin-top: 12px; font-size: 13px; color: var(--ink-soft); background: var(--surface-2); border-radius: 10px; padding: 10px 13px; display: flex; align-items: center; gap: 8px; }

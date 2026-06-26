@@ -2,7 +2,6 @@
 /* "Mis tareas" — tarea ya tomada por el voluntario, con sus FASES
    (Tomada → En curso → Completada) y acciones, incluida "No pude terminarla". */
 import { PRIOS, SKILLS, ago, COORD_NAME, COORD_PHONE } from '@/lib/model';
-import TaskMiniMap from './TaskMiniMap';
 
 // Normaliza un teléfono venezolano a formato internacional para tel:/WhatsApp.
 function intlNumber(phone) {
@@ -28,7 +27,6 @@ function waText(t, mine, isReporter) {
     `Tomé la tarea "${t.title}"${lugar} y me pongo en contacto para coordinar.`);
 }
 
-const PRIO_HEX = { alta: '#e11d48', media: '#d97706', baja: '#0d9a6c' };
 const PHASES = [
   { key: 'tomada', lab: 'Tomada' },
   { key: 'curso', lab: 'En curso' },
@@ -51,29 +49,50 @@ export default function MyTaskCard({ t, mine, online, contact, h, i = 0 }) {
         <span className="prio-tag">{PRIOS[t.prio].label}</span>
       </div>
       <div className="body">
-        <TaskMiniMap zone={t.zone} color={PRIO_HEX[t.prio]} height={104} />
+        {sk && <div className="skill-line"><span className="skill">{sk.icon} {sk.label}</span></div>}
 
-        {/* Stepper de fases */}
-        <div className="stepper" style={{ marginTop: 14 }}>
-          {PHASES.map((p, idx) => {
-            const done = idx < cur;
-            const current = idx === cur;
-            const completed = current && mine.state === 'completada';
-            const stpCls = completed ? 'completed' : done ? 'done' : current ? 'current' : 'todo';
-            return (
-              <div key={p.key} style={{ display: 'contents' }}>
-                <div className={`stp ${stpCls}`}>
-                  <div className="dot">{done || completed ? '✓' : idx + 1}</div>
-                  <div className="lab">{p.lab}</div>
+        {/* ESTADO — protagonista */}
+        <div className="status-block">
+          <div className="status-label">Estado de la tarea</div>
+          <div className="stepper big">
+            {PHASES.map((p, idx) => {
+              const done = idx < cur;
+              const current = idx === cur;
+              const completed = current && mine.state === 'completada';
+              const stpCls = completed ? 'completed' : done ? 'done' : current ? 'current' : 'todo';
+              return (
+                <div key={p.key} style={{ display: 'contents' }}>
+                  <div className={`stp ${stpCls}`}>
+                    <div className="dot">{done || completed ? '✓' : idx + 1}</div>
+                    <div className="lab">{p.lab}</div>
+                  </div>
+                  {idx < PHASES.length - 1 && <div className={`link ${idx < cur ? 'on' : ''}`} />}
                 </div>
-                {idx < PHASES.length - 1 && <div className={`link ${idx < cur ? 'on' : ''}`} />}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
 
-        {sk && <div className="meta" style={{ marginTop: 6 }}><div className="row"><span className="mi">🛠️</span><span className="skill">{sk.icon} {sk.label}</span></div></div>}
+        {/* Acciones de la fase */}
+        {mine.state === 'tomada' && (
+          <div className="acts">
+            <button className="btn btn-go" onClick={() => h.start(t.id)}>▶️ Empecé</button>
+            <button className="btn btn-danger" onClick={() => h.release(t.id)}>✖️ No puedo</button>
+          </div>
+        )}
+        {mine.state === 'curso' && (
+          <div className="acts">
+            <button className="btn btn-done" onClick={() => h.complete(t.id)}>✔️ Completada</button>
+            <button className="btn btn-danger" onClick={() => h.release(t.id)}>No pude terminarla</button>
+          </div>
+        )}
+        {mine.state === 'completada' && (
+          <div className="done-msg">🎉 ¡Completada! Gracias por responder.</div>
+        )}
 
+        {!online && <div className="pend"><span className="state-badge state-pendiente"><span className="led" />Pendiente de sincronizar</span></div>}
+
+        {/* Contacto (al final) */}
         {(() => {
           const isReporter = !!t.reporterPhone;
           const num = intlNumber(isReporter ? t.reporterPhone : COORD_PHONE);
@@ -91,25 +110,6 @@ export default function MyTaskCard({ t, mine, online, contact, h, i = 0 }) {
             </div>
           );
         })()}
-
-        {!online && <div className="pend"><span className="state-badge state-pendiente"><span className="led" />Pendiente de sincronizar</span></div>}
-
-        {/* Acciones según la fase */}
-        {mine.state === 'tomada' && (
-          <div className="acts">
-            <button className="btn btn-go" onClick={() => h.start(t.id)}>▶️ Empecé</button>
-            <button className="btn btn-danger" onClick={() => h.release(t.id)}>✖️ No puedo</button>
-          </div>
-        )}
-        {mine.state === 'curso' && (
-          <div className="acts">
-            <button className="btn btn-done" onClick={() => h.complete(t.id)}>✔️ Completada</button>
-            <button className="btn btn-danger" onClick={() => h.release(t.id)}>No pude terminarla</button>
-          </div>
-        )}
-        {mine.state === 'completada' && (
-          <div className="done-msg">🎉 ¡Completada! Gracias por responder.</div>
-        )}
 
         <div className="foot" style={{ marginTop: 12 }}>
           <span className="stamp">🕐 Publicada {ago(t.created)}</span>
