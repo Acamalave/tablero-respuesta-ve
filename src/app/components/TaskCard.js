@@ -1,8 +1,7 @@
 'use client';
-/* Tarjeta de tarea (tablero) — limpia, con mini-mapa y una acción clara.
-   La gestión de una tarea ya tomada vive en "Mis tareas" (MyTaskCard). */
+/* Tarjeta de tarea (lista) — LIVIANA, sin mapa. Es un preview: al tocarla
+   se abre el detalle (con mapa). Mantiene la acción de tomar la tarea. */
 import { PRIOS, SKILLS, ago, taskState, takenCount } from '@/lib/model';
-import TaskMiniMap from './TaskMiniMap';
 
 const STATE_BADGE = {
   abierta: ['state-abierta', 'Abierta'],
@@ -10,15 +9,15 @@ const STATE_BADGE = {
   curso: ['state-curso', 'En curso'],
   completada: ['state-completada', 'Completada'],
 };
-const PRIO_HEX = { alta: '#e11d48', media: '#d97706', baja: '#0d9a6c' };
 
-export default function TaskCard({ t, mode, i = 0, h }) {
+export default function TaskCard({ t, mode, i = 0, h, distanceLabel, onOpen }) {
   const st = taskState(t);
   const taken = takenCount(t);
   const pct = Math.min(100, Math.round((taken / t.need) * 100));
   const sk = SKILLS[t.skill];
   const [cls, label] = STATE_BADGE[st] || STATE_BADGE.abierta;
 
+  const stop = (e) => e.stopPropagation();
   let action = null;
   if (mode === 'vol') {
     action = taken < t.need
@@ -34,13 +33,13 @@ export default function TaskCard({ t, mode, i = 0, h }) {
   }
 
   const who = mode === 'coord' && (t.takenBy || []).length ? (
-    <div className="meta" style={{ marginTop: 8 }}>
-      <div className="row"><span className="mi">👤</span>{(t.takenBy || []).filter((x) => x.state !== 'soltada').map((x) => x.name).join(', ') || '—'}</div>
-    </div>
+    <div className="row" style={{ marginTop: 0 }}><span className="mi">👤</span>{(t.takenBy || []).filter((x) => x.state !== 'soltada').map((x) => x.name).join(', ') || '—'}</div>
   ) : null;
 
   return (
-    <article className="task" data-prio={t.prio} style={{ animationDelay: `${i * 50}ms` }}>
+    <article className="task" data-prio={t.prio} style={{ animationDelay: `${i * 50}ms`, cursor: onOpen ? 'pointer' : 'default' }}
+      onClick={onOpen} role={onOpen ? 'button' : undefined} tabIndex={onOpen ? 0 : undefined}
+      onKeyDown={(e) => { if (onOpen && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onOpen(); } }}>
       <span className="spine" />
       <div className="body">
         <div className="top">
@@ -50,10 +49,9 @@ export default function TaskCard({ t, mode, i = 0, h }) {
         <div className="meta">
           <div className="row"><span className="mi">📍</span><span>{t.loc}</span></div>
           <div className="row"><span className="mi">👥</span>Hacen falta <b>&nbsp;{t.need}&nbsp;</b> {t.need === 1 ? 'persona' : 'personas'}{sk && <span className="skill" style={{ marginLeft: 6 }}>{sk.icon} {sk.label}</span>}</div>
+          {distanceLabel && <div className="row"><span className="mi">🧭</span>A <b>&nbsp;{distanceLabel}&nbsp;</b> de ti</div>}
+          {who}
         </div>
-
-        <TaskMiniMap zone={t.zone} color={PRIO_HEX[t.prio]} />
-        {who}
 
         <div className="cupos">
           <div className="bar"><i style={{ width: `${pct}%` }} /></div>
@@ -62,8 +60,9 @@ export default function TaskCard({ t, mode, i = 0, h }) {
 
         <div className="foot">
           <span className={`state-badge ${cls}`}><span className="led" />{label}</span>
+          {onOpen && <span className="open-hint">🗺️ Ver mapa y detalle ›</span>}
         </div>
-        <div style={{ marginTop: 13 }}>{action}</div>
+        <div style={{ marginTop: 13 }} onClick={stop}>{action}</div>
       </div>
     </article>
   );

@@ -4,18 +4,41 @@
    --------------------------------------------------------------- */
 
 export const ZONES = {
-  caracas:   { name: 'Caracas',    sector: 'Distrito Capital', x: 70, y: 56 },
-  laguaira:  { name: 'La Guaira',  sector: 'Litoral central',  x: 60, y: 26 },
-  sanfelipe: { name: 'San Felipe', sector: 'Yaracuy',          x: 24, y: 50 },
-  yumare:    { name: 'Yumare',     sector: 'Yaracuy norte',    x: 34, y: 22 },
-  valencia:  { name: 'Valencia',   sector: 'Carabobo',         x: 48, y: 60 },
+  caracas:   { name: 'Caracas',    sector: 'Distrito Capital', x: 70, y: 56, lat: 10.4806, lng: -66.9036 },
+  laguaira:  { name: 'La Guaira',  sector: 'Litoral central',  x: 60, y: 26, lat: 10.6000, lng: -66.9333 },
+  sanfelipe: { name: 'San Felipe', sector: 'Yaracuy',          x: 24, y: 50, lat: 10.3399, lng: -68.7406 },
+  yumare:    { name: 'Yumare',     sector: 'Yaracuy norte',    x: 34, y: 22, lat: 10.6126, lng: -68.6906 },
+  valencia:  { name: 'Valencia',   sector: 'Carabobo',         x: 48, y: 60, lat: 10.1620, lng: -68.0077 },
 };
 export const ZONE_KEYS = Object.keys(ZONES);
 
+// distancia abstracta sobre el lienzo (fallback de orden cuando no hay GPS)
 export function dist(a, b) {
   const za = ZONES[a], zb = ZONES[b];
   if (!za || !zb) return 999;
   return Math.hypot(za.x - zb.x, za.y - zb.y);
+}
+
+// distancia real en km entre dos coordenadas (Haversine)
+export function haversineKm(aLat, aLng, bLat, bLng) {
+  const R = 6371;
+  const dLat = ((bLat - aLat) * Math.PI) / 180;
+  const dLng = ((bLng - aLng) * Math.PI) / 180;
+  const s = Math.sin(dLat / 2) ** 2 +
+    Math.cos((aLat * Math.PI) / 180) * Math.cos((bLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+// km entre la posición del usuario {lat,lng} y la zona de una tarea
+export function kmTo(pos, zone) {
+  const Z = ZONES[zone];
+  if (!pos || !Z) return null;
+  return haversineKm(pos.lat, pos.lng, Z.lat, Z.lng);
+}
+export function fmtKm(km) {
+  if (km == null) return null;
+  if (km < 1) return 'menos de 1 km';
+  if (km < 10) return `${km.toFixed(1)} km`;
+  return `${Math.round(km)} km`;
 }
 
 // Habilidades / recursos que una persona puede ofrecer, en sintonía con la

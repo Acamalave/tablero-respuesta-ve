@@ -7,11 +7,12 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import Flag from './components/Flag';
 import TaskCard from './components/TaskCard';
+import TaskDetail from './components/TaskDetail';
 import MyTaskCard from './components/MyTaskCard';
 import TacticalMap from './components/TacticalMap';
 import {
   ZONES, ZONE_KEYS, SKILLS, PRIOS, PRIO_ORDER,
-  dist, taskState, avatarFor, prioBg, ago, COORD_CONTACT,
+  dist, kmTo, fmtKm, taskState, avatarFor, prioBg, ago, COORD_CONTACT,
 } from '@/lib/model';
 import * as store from '@/lib/store';
 
@@ -43,6 +44,8 @@ export default function Page() {
   const [adminGate, setAdminGate] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [modal, setModal] = useState(null);
+  const [userPos, setUserPos] = useState(null);     // {lat,lng} de geolocalización
+  const [geoState, setGeoState] = useState('idle');  // idle | asking | on | denied
   const [, forceTick] = useState(0);
 
   const pushToast = useCallback((title, body, icon = '🔔', tag = 'Notificación') => {
@@ -75,6 +78,16 @@ export default function Page() {
   // Contadores en vivo del perfil
   const me = useMemo(() => users.find((v) => v.id === uid) || {}, [users, uid]);
   const counters = { done: me.done || 0, reports: me.reports || 0 };
+
+  const requestGeo = useCallback(() => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) { setGeoState('denied'); return; }
+    setGeoState('asking');
+    navigator.geolocation.getCurrentPosition(
+      (p) => { setUserPos({ lat: p.coords.latitude, lng: p.coords.longitude }); setGeoState('on'); },
+      () => setGeoState('denied'),
+      { enableHighAccuracy: false, timeout: 9000, maximumAge: 300000 }
+    );
+  }, []);
 
   async function toggleNet() {
     const next = !online;
@@ -143,7 +156,7 @@ export default function Page() {
         ) : role === 'coordinador' ? (
           <Coordinador {...{ tasks, reports, volunteers: users, coordTab, setCoordTab, h, openCreate: (p) => setModal({ prefill: p || null }), onConvert: (r) => setModal({ prefill: r }), onDiscard: (id) => store.setReportStatus(id, 'descartado') }} />
         ) : user ? (
-          <Usuario {...{ user: { ...user, uid }, counters, mode, setMode, tasks, reports, uid, online, volTab, setVolTab, h, onSendReport: sendReport }} />
+          <Usuario {...{ user: { ...user, uid }, counters, mode, setMode, tasks, reports, uid, online, volTab, setVolTab, h, onSendReport: sendReport, userPos, geoState, requestGeo }} />
         ) : (
           <Registro initialMode={mode} onDone={register} />
         )}
@@ -304,12 +317,11 @@ function Registro({ initialMode, onDone }) {
 /* ====================================================================
    USUARIO — perfil unificado con switch Ayudar / Reportar
    ==================================================================== */
-function Usuario({ user, counters, mode, setMode, tasks, reports, uid, online, volTab, setVolTab, h, onSendReport }) {
+function Usuario({ user, counters, mode, setMode, tasks, reports, uid, online, volTab, setVolTab, h, onSendReport, userPos, geoState, requestGeo }) {
   return (
     <section className="view">
-      <div className="panel vol-head">
-        <div className="ava">{avatarFor(user.name)}</div>
-        <div className="who"><b>{user.name}</b><span>📞 {user.phone} · 🪪 {user.cedula}</span></div>
+      <div className="panel prof-head">
+        <div className="who"><b>{user.name}</b><span>📞 {user.phone} &nbsp;·&nbsp; 🪪 {user.cedula}</span></div>
         <div className="prof-stats">
           <div className="ps help"><b>{counters.done}</b><span>Ayudas</span></div>
           <div className="ps rep"><b>{counters.reports}</b><span>Reportes</span></div>
@@ -322,22 +334,30 @@ function Usuario({ user, counters, mode, setMode, tasks, reports, uid, online, v
       </div>
 
       {mode === 'voluntario'
-        ? <VolunteerArea tasks={tasks} user={user} online={online} volTab={volTab} setVolTab={setVolTab} h={h} />
+        ? <VolunteerArea tasks={tasks} user={user} online={online} volTab={volTab} setVolTab={setVolTab} h={h} userPos={userPos} geoState={geoState} requestGeo={requestGeo} />
         : <ReportArea reports={reports} uid={uid} onSend={onSendReport} onSwitch={() => setMode('voluntario')} />}
     </section>
   );
 }
 
-function VolunteerArea({ tasks, user, online, volTab, setVolTab, h }) {
+function VolunteerArea({ tasks, user, online, volTab, setVolTab, h, userPos, geoState, requestGeo }) {
+  const [openId, setOpenId] = useState(null);
   const hasMine = (t) => (t.takenBy || []).some((x) => x.uid === user.uid && x.state !== 'soltada');
+
+  // Pide ubicación al entrar al tablero (si no se ha intentado).
+  useEffect(() => { if (geoState === 'idle') requestGeo(); }, [geoState, requestGeo]);
 
   const board = useMemo(() => {
     const ref = user.zone;
     return tasks
       .filter((t) => ['abierta', 'tomada', 'curso'].includes(taskState(t)) && !hasMine(t))
-      .map((t) => ({ t, proximity: ref ? dist(ref, t.zone) : 50, skillMatch: (user.skills || []).includes(t.skill) ? 0 : 1 }))
+      .map((t) => {
+        const km = userPos ? kmTo(userPos, t.zone) : null;
+        const proximity = km != null ? km : (ref ? dist(ref, t.zone) : 50);
+        return { t, km, proximity, skillMatch: (user.skills || []).includes(t.skill) ? 0 : 1 };
+      })
       .sort((a, b) => PRIO_ORDER[a.t.prio] - PRIO_ORDER[b.t.prio] || a.proximity - b.proximity || a.skillMatch - b.skillMatch || b.t.created - a.t.created);
-  }, [tasks, user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tasks, user, userPos]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mine = useMemo(() => tasks
     .map((t) => ({ t, mine: (t.takenBy || []).find((x) => x.uid === user.uid && x.state !== 'soltada') }))
@@ -345,23 +365,42 @@ function VolunteerArea({ tasks, user, online, volTab, setVolTab, h }) {
     .sort((a, b) => (PHASE_ORDER[a.mine.state] - PHASE_ORDER[b.mine.state]) || b.t.created - a.t.created),
   [tasks, user.uid]);
 
+  const openTask = board.find((o) => o.t.id === openId);
+  // Una tarea a la vez: si hay una en curso, el voluntario se enfoca en ella.
+  const active = mine.find((o) => o.mine.state === 'tomada' || o.mine.state === 'curso');
+  const done = mine.filter((o) => o.mine.state === 'completada');
+
   return (
     <>
-      <div className="subtabs">
-        <button className={volTab === 'tablero' ? 'active' : ''} onClick={() => setVolTab('tablero')}>🗂️ Tareas abiertas <span className="count">{board.length}</span></button>
-        <button className={volTab === 'mis' ? 'active' : ''} onClick={() => setVolTab('mis')}>🎒 Mis tareas <span className="count">{mine.length}</span></button>
+      <div className="subtabs vol-tabs">
+        <button className={volTab === 'tablero' ? 'active' : ''} onClick={() => setVolTab('tablero')}>🗂️ Tareas abiertas{!active && <span className="count">{board.length}</span>}</button>
+        <button className={volTab === 'mis' ? 'active' : ''} onClick={() => setVolTab('mis')}>🎒 Mis tareas <span className="count">{active ? 1 : done.length}</span></button>
       </div>
-      {volTab === 'tablero' ? (
+
+      {active ? (
+        // Foco en la tarea activa: aparece bajo el perfil hasta finalizar o dejarla.
         <>
-          <div className="subtabs"><button className="static">↑ Ordenadas por prioridad · cercanía a {ZONES[user.zone]?.name || 'tu zona'} · tu habilidad</button></div>
+          <div className="focus-note"><span>🎯</span><span>Tienes una tarea en curso. Termínala o déjala para ver y tomar otras.</span></div>
+          <div className="task-grid"><MyTaskCard t={active.t} mine={active.mine} online={online} contact={COORD_CONTACT} h={h} /></div>
+        </>
+      ) : volTab === 'tablero' ? (
+        <>
+          {!userPos && (
+            <div style={{ marginBottom: 14 }}>
+              <button className="btn btn-ghost btn-sm" onClick={requestGeo}>{geoState === 'asking' ? '📍 Ubicando…' : '📍 Usar mi ubicación para ver distancias'}</button>
+            </div>
+          )}
           {board.length
-            ? <div className="task-grid">{board.map((o, i) => <TaskCard key={o.t.id} t={o.t} mode="vol" i={i} h={h} />)}</div>
+            ? <div className="task-grid">{board.map((o, i) => (
+                <TaskCard key={o.t.id} t={o.t} mode="vol" i={i} h={h} distanceLabel={o.km != null ? fmtKm(o.km) : null} onOpen={() => setOpenId(o.t.id)} />
+              ))}</div>
             : <Empty title="Todo cubierto" sub="No hay tareas abiertas ahora mismo. Te avisaremos cuando surja una cerca de ti." />}
+          {openTask && <TaskDetail t={openTask.t} mode="vol" distanceLabel={openTask.km != null ? fmtKm(openTask.km) : null} h={h} onClose={() => setOpenId(null)} />}
         </>
       ) : (
-        mine.length
-          ? <div className="task-grid">{mine.map((o, i) => <MyTaskCard key={o.t.id} t={o.t} mine={o.mine} online={online} contact={COORD_CONTACT} h={h} i={i} />)}</div>
-          : <Empty title="Aún no has tomado tareas" sub="Ve a “Tareas abiertas” y toma la que puedas hacer. Aparecerá aquí con sus fases." />
+        done.length
+          ? <div className="task-grid">{done.map((o, i) => <MyTaskCard key={o.t.id} t={o.t} mine={o.mine} online={online} contact={COORD_CONTACT} h={h} i={i} />)}</div>
+          : <Empty title="Aún no has completado tareas" sub="Toma una tarea en “Tareas abiertas”. Aparecerá aquí con su estatus." />
       )}
     </>
   );
@@ -454,6 +493,8 @@ function Stat({ n, l, a }) {
 }
 
 function CoordBoard({ tasks, h }) {
+  const [openId, setOpenId] = useState(null);
+  const openTask = tasks.find((t) => t.id === openId);
   const groups = ['alta', 'media', 'baja'].map((prio) => {
     const list = tasks.filter((t) => t.prio === prio && !['completada', 'cancelada'].includes(taskState(t))).sort((a, b) => b.created - a.created);
     if (!list.length) return null;
@@ -464,11 +505,16 @@ function CoordBoard({ tasks, h }) {
             <span className="led" style={{ background: PRIOS[prio].led }} />{PRIOS[prio].label.toUpperCase()} · {list.length}
           </span>
         </div>
-        <div className="task-grid">{list.map((t, i) => <TaskCard key={t.id} t={t} mode="coord" i={i} h={h} />)}</div>
+        <div className="task-grid">{list.map((t, i) => <TaskCard key={t.id} t={t} mode="coord" i={i} h={h} onOpen={() => setOpenId(t.id)} />)}</div>
       </div>
     );
   });
-  return groups.some(Boolean) ? <>{groups}</> : <Empty title="Sin tareas activas" sub="Crea la primera tarea para empezar a coordinar." />;
+  return (
+    <>
+      {groups.some(Boolean) ? groups : <Empty title="Sin tareas activas" sub="Crea la primera tarea para empezar a coordinar." />}
+      {openTask && <TaskDetail t={openTask} mode="coord" h={h} onClose={() => setOpenId(null)} />}
+    </>
+  );
 }
 
 function Roster({ volunteers }) {
