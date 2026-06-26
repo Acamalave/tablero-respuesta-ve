@@ -391,9 +391,9 @@ textarea.input { resize: vertical; min-height: 84px; }
 .prof-stats button.ps { font: inherit; color: inherit; cursor: pointer; transition: border-color .2s var(--ease), background .2s var(--ease); }
 .prof-stats button.ps:hover { border-color: var(--ve-blue); background: #eaf1fd; }
 
-/* Botón "Editar mis datos" del perfil */
-.prof-edit { align-self: flex-start; margin-top: 8px; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--ve-blue); background: #eaf1fd; border: 0; border-radius: 999px; padding: 6px 13px; cursor: pointer; transition: background .2s var(--ease); }
-.prof-edit:hover { background: #d9e6fb; }
+/* Ícono de editar (lápiz) al extremo izquierdo de la tarjeta de perfil */
+.prof-edit-ic { flex-shrink: 0; width: 38px; height: 38px; border-radius: 11px; border: 1px solid var(--border); background: var(--surface-2); font-size: 16px; line-height: 1; cursor: pointer; display: grid; place-items: center; transition: border-color .2s var(--ease), background .2s var(--ease); }
+.prof-edit-ic:hover { border-color: var(--ve-blue); background: #eaf1fd; }
 
 /* Línea de contacto del coordinador en su panel */
 .coord-contact-line { margin: -6px 0 16px; font-size: 12.5px; color: var(--ink-faint); }
