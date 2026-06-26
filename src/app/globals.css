@@ -205,6 +205,7 @@ body::before {
 /* ===================== Stats ===================== */
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
 .stats.stats-5 { grid-template-columns: repeat(5, 1fr); }
+.stats.stats-6 { grid-template-columns: repeat(6, 1fr); }
 .stat { position: relative; padding: 18px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); overflow: hidden; }
 .stat::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--accent, var(--ve-blue-bright)); }
 .stat .num { font-family: var(--font-display); font-weight: 900; font-size: 30px; line-height: 1; color: var(--ink); }
@@ -628,7 +629,7 @@ textarea.input { resize: vertical; min-height: 84px; }
 
 /* ===================== Responsive ===================== */
 @media (max-width: 880px) {
-  .stats, .stats.stats-5 { grid-template-columns: 1fr 1fr; }
+  .stats, .stats.stats-5, .stats.stats-6 { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 560px) {
   .app { padding: 0 14px 28px; }

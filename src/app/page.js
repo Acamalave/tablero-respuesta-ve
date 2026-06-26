@@ -126,8 +126,8 @@ export default function Page() {
     setRefreshing(true);
     try {
       if (role === 'coordinador') {
-        const [board, st, vc, anns] = await Promise.all([store.fetchBoard(), store.fetchStats(), store.fetchVisitsCount(), store.fetchAnnouncements()]);
-        setTasks(board.rows); setBoardLast(board.last); setBoardMore(board.more); setStats(st); setVisitsCount(vc); setAnnouncements(anns);
+        const [board, st, vc, hc, anns] = await Promise.all([store.fetchBoard(), store.fetchStats(), store.fetchVisitsCount(), store.fetchHelpersCount(), store.fetchAnnouncements()]);
+        setTasks(board.rows); setBoardLast(board.last); setBoardMore(board.more); setStats(st); setVisitsCount(vc); setHelpers(hc); setAnnouncements(anns);
         if (coordTab === 'reportes') setReports(await store.fetchPendingReports());
         else if (coordTab === 'voluntarios') setVolunteers(await store.fetchVolunteers());
         else if (coordTab === 'sugerencias') setSuggestions(await store.fetchSuggestions());
@@ -300,7 +300,7 @@ export default function Page() {
             onCoordinator={() => { if (isAdmin) { setRole('coordinador'); setCoordTab('tablero'); } else setAdminGate(true); }}
           />
         ) : role === 'coordinador' ? (
-          <Coordinador {...{ tasks, reports, volunteers, suggestions, visitsCount, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, announcements, isAdmin, onAddInfo: () => setAnnounceModal(true), onRemoveInfo: removeAnnouncement, onEditCoord: () => setEditCoord(true), onOpenVol: setDetailVol, onSuggestStatus: async (id, st) => { await store.setSuggestionStatus(id, st); setSuggestions((s) => s.map((x) => (x.id === id ? { ...x, status: st } : x))); }, openCreate: (p) => setModal({ prefill: p || null }), onConvert: (r) => setModal({ prefill: r }), onDiscard: async (id) => { await store.setReportStatus(id, 'descartado'); refresh(); } }} />
+          <Coordinador {...{ tasks, reports, volunteers, suggestions, visitsCount, registered: helpers, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, announcements, isAdmin, onAddInfo: () => setAnnounceModal(true), onRemoveInfo: removeAnnouncement, onEditCoord: () => setEditCoord(true), onOpenVol: setDetailVol, onSuggestStatus: async (id, st) => { await store.setSuggestionStatus(id, st); setSuggestions((s) => s.map((x) => (x.id === id ? { ...x, status: st } : x))); }, openCreate: (p) => setModal({ prefill: p || null }), onConvert: (r) => setModal({ prefill: r }), onDiscard: async (id) => { await store.setReportStatus(id, 'descartado'); refresh(); } }} />
         ) : user ? (
           <Usuario {...{ user: { ...user, uid }, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, uid, online, volView, setVolView, h, coord, announcements, isAdmin, onRemoveInfo: removeAnnouncement, onEditProfile: () => setEditProfile(true), onSuggest: () => setSuggestModal(true), onSendReport: sendReport, userPos, geoState, requestGeo }} />
         ) : (
@@ -1030,7 +1030,7 @@ function ReportArea({ myReports, onSend, onSwitch, userPos, requestGeo }) {
 /* ====================================================================
    COORDINADOR
    ==================================================================== */
-function Coordinador({ tasks, reports, volunteers, suggestions, visitsCount, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, announcements, isAdmin, onAddInfo, onRemoveInfo, onEditCoord, onOpenVol, onSuggestStatus, openCreate, onConvert, onDiscard }) {
+function Coordinador({ tasks, reports, volunteers, suggestions, visitsCount, registered, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, announcements, isAdmin, onAddInfo, onRemoveInfo, onEditCoord, onOpenVol, onSuggestStatus, openCreate, onConvert, onDiscard }) {
   const newSugg = suggestions.filter((s) => s.status === 'nueva').length;
   return (
     <section className="view">
@@ -1041,8 +1041,9 @@ function Coordinador({ tasks, reports, volunteers, suggestions, visitsCount, sta
         <button className="btn btn-primary btn-sm" onClick={() => openCreate()}>➕ Crear tarea</button>
       </div>
       <div className="coord-contact-line">📞 Contacto que ven los voluntarios: <b>{coord?.name}</b> · {coord?.phone}</div>
-      <div className="stats stats-5">
+      <div className="stats stats-6">
         <Stat n={visitsCount} l="Personas únicas" a="var(--ve-blue)" />
+        <Stat n={registered} l="Registradas" a="var(--p-baja)" />
         <Stat n={stats.abiertas} l="Abiertas" a="var(--p-baja)" />
         <Stat n={stats.encurso} l="En curso" a="var(--p-media)" />
         <Stat n={stats.completadas} l="Completadas" a="var(--ink-faint)" />
