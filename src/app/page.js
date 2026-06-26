@@ -189,6 +189,14 @@ function RoleLanding({ onPick, isAdmin, onCoordinator }) {
           {isAdmin ? '🧭 Entrar como coordinador' : '🔒 Acceso del coordinador'}
         </button>
       </div>
+      <div className="home-disclaimer">
+        <span className="hd-flag">🇻🇪</span>
+        <p>
+          En estos momentos se requiere toda la <b>organización y responsabilidad</b> posible.
+          Si no puedes atender o ayudar, lo entendemos — pero <b>sé responsable con el uso</b> de
+          esta herramienta: detrás de cada tarea hay personas reales. <b className="hd-strong">Venezuela nos necesita.</b>
+        </p>
+      </div>
     </section>
   );
 }
