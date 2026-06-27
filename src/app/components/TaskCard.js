@@ -54,6 +54,7 @@ export default function TaskCard({ t, mode, i = 0, h, distanceLabel, onOpen }) {
           {sk && <span className="skill">{sk.label}</span>}
         </div>
 
+        {t.reporterName && <div className="reporter">📣 Reportada por <b>{t.reporterName}</b></div>}
         {distanceLabel && <div className="dist">A <b>{distanceLabel}</b> de ti</div>}
         {who && <div className="dist">Asignada a <b>{who}</b></div>}
 

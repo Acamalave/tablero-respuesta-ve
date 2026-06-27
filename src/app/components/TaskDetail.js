@@ -47,6 +47,7 @@ export default function TaskDetail({ t: t0, mode, distanceLabel, h, onClose }) {
           <div className="dm-row"><span className="dm-k">Ubicación</span><span className="dm-v">{t.loc}</span></div>
           <div className="dm-row"><span className="dm-k">Equipo</span><span className="dm-v">Faltan <b>{t.need}</b> {t.need === 1 ? 'persona' : 'personas'}{sk ? ` · ${sk.label}` : ''}</span></div>
           {distanceLabel && <div className="dm-row"><span className="dm-k">Distancia</span><span className="dm-v"><b style={{ color: 'var(--ve-blue)' }}>{distanceLabel}</b> de tu ubicación</span></div>}
+          {t.reporterName && <div className="dm-row"><span className="dm-k">Reportada por</span><span className="dm-v">{t.reporterName}</span></div>}
         </div>
 
         <TaskMiniMap zone={t.zone} color={PRIO_HEX[t.prio]} />

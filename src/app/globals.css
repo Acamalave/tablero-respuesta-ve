@@ -266,6 +266,8 @@ body::before {
 .task.tidy .facts .skill { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 7px; background: var(--surface-2); color: var(--ink-soft); border: 1px solid var(--border); }
 .task.tidy .dist { margin-top: 7px; font-size: 13px; color: var(--ink-faint); }
 .task.tidy .dist b { color: var(--ve-blue); font-weight: 700; }
+.task.tidy .reporter { margin-top: 7px; font-size: 13px; color: var(--ink-soft); }
+.task.tidy .reporter b { color: var(--ink); font-weight: 700; }
 .task.tidy .cupos { margin-top: 14px; }
 .task.tidy .lab { font-size: 12px; }
 
