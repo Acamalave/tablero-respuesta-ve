@@ -227,6 +227,26 @@ export async function createTask(data) {
   return ref.id;
 }
 
+// Editar una tarea publicada (coordinador): título, prioridad, zona, lugar,
+// cupos y recurso. Recalcula los campos denormalizados (need afecta el estado).
+export async function updateTask(id, data) {
+  const ref = doc(TASKS, id);
+  return runTransaction(db, async (tx) => {
+    const s = await tx.get(ref);
+    if (!s.exists()) return;
+    const t = s.data();
+    const merged = {
+      ...t,
+      title: data.title, prio: data.prio || 'media', zone: data.zone || 'caracas', loc: data.loc || '',
+      need: Math.max(1, parseInt(data.need) || 1), skill: data.skill || null,
+    };
+    tx.update(ref, {
+      title: merged.title, prio: merged.prio, zone: merged.zone, loc: merged.loc, need: merged.need, skill: merged.skill,
+      ...denorm(merged),
+    });
+  });
+}
+
 export async function takeTask(taskId, volunteer) {
   const ref = doc(TASKS, taskId);
   return runTransaction(db, async (tx) => {

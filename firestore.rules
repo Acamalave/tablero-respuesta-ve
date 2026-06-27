@@ -45,14 +45,9 @@ service cloud.firestore {
     match /tasks/{id} {
       allow read:   if true;
       allow create: if validTask(request.resource.data);
-      allow update: if
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['takenBy','state','active','takerUids','prio','status'])
-        && same('created') && same('title') && same('need')
-        && request.resource.data.prio in ['alta','media','baja']
-        && request.resource.data.status in ['activa','cancelada']
-        && request.resource.data.state in ['abierta','tomada','curso','completada','cancelada']
-        && request.resource.data.takenBy is list   && request.resource.data.takenBy.size()   <= 200
-        && request.resource.data.takerUids is list && request.resource.data.takerUids.size() <= 200;
+      // Permite tomar/avanzar/cancelar Y que el coordinador edite el contenido.
+      // El doc resultante debe ser una tarea válida y 'created' no cambia.
+      allow update: if validTask(request.resource.data) && same('created');
       allow delete: if false;
     }
 

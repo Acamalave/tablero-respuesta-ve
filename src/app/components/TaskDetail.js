@@ -76,12 +76,18 @@ export default function TaskDetail({ t: t0, mode, distanceLabel, h, onClose }) {
         )}
 
         <div className="actions">
-          <button className="btn btn-ghost" onClick={onClose}>Cerrar</button>
           {mode === 'vol'
-            ? (taken < t.need
-                ? <button className="btn btn-take" onClick={take}>Tomar esta tarea</button>
-                : <button className="btn btn-ghost" disabled>Cupos completos</button>)
-            : <button className="btn btn-danger" onClick={() => { h.cancel(t.id); onClose(); }}>Cerrar tarea</button>}
+            ? (<>
+                <button className="btn btn-ghost" onClick={onClose}>Cerrar</button>
+                {taken < t.need
+                  ? <button className="btn btn-take" onClick={take}>Tomar esta tarea</button>
+                  : <button className="btn btn-ghost" disabled>Cupos completos</button>}
+              </>)
+            : (<>
+                <button className="btn btn-ghost btn-sm" onClick={onClose}>Cerrar</button>
+                <button className="btn btn-take btn-sm" onClick={() => { h.edit(t); onClose(); }}>✏️ Editar</button>
+                <button className="btn btn-danger btn-sm" onClick={() => { h.cancel(t.id); onClose(); }}>Cancelar tarea</button>
+              </>)}
         </div>
       </div>
     </div>

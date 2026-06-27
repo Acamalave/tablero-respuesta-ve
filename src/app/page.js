@@ -187,6 +187,8 @@ export default function Page() {
     cancel: async (id) => { await store.cancelTask(id); await refresh(); pushToast('Tarea cerrada', 'Salió del tablero activo.', '🗑️', 'Coordinador'); },
     // Coordinador: cancela la asignación de UNA persona; la tarea vuelve a estar disponible.
     unassign: async (id, targetUid, name) => { await store.releaseTask(id, targetUid); await refresh(); pushToast('Asignación cancelada', `${name || 'La persona'} ya no tiene esta tarea — vuelve a estar disponible.`, '↩️', 'Coordinador'); },
+    // Coordinador: abre el editor de una tarea ya publicada.
+    edit: (task) => setModal({ editing: task }),
   };
 
   const sendReport = async (data) => {
@@ -332,12 +334,17 @@ export default function Page() {
         setIsAdmin(true); setAdminGate(false); setRole('coordinador'); setCoordTab('tablero');
       }} />}
 
-      {modal && <CreateModal prefill={modal.prefill} onClose={() => setModal(null)} onSave={async (data, prefill) => {
-        await store.createTask({ ...data, reporterName: prefill?.reporterName || '', reporterPhone: prefill?.reporterPhone || '' });
-        if (prefill?.id) await store.setReportStatus(prefill.id, 'convertido');
+      {modal && <CreateModal prefill={modal.prefill} editing={modal.editing} onClose={() => setModal(null)} onSave={async (data, ctx) => {
+        if (modal.editing) {
+          await store.updateTask(modal.editing.id, data);
+          pushToast('Tarea actualizada', `Se guardaron los cambios de “${data.title}”.`, '✏️', 'Coordinador');
+        } else {
+          await store.createTask({ ...data, reporterName: ctx?.reporterName || '', reporterPhone: ctx?.reporterPhone || '' });
+          if (ctx?.id) await store.setReportStatus(ctx.id, 'convertido');
+          pushToast('Tarea publicada', `“${data.title}” ya está en el tablero.`, '📡', 'Coordinador');
+        }
         setModal(null);
         await refresh();
-        pushToast('Tarea publicada', `“${data.title}” ya está en el tablero.`, '📡', 'Coordinador');
       }} />}
 
       <div className="toasts">
@@ -1200,18 +1207,19 @@ function Inbox({ reports, onConvert, onDiscard }) {
 /* ====================================================================
    MODAL — crear tarea
    ==================================================================== */
-function CreateModal({ prefill, onClose, onSave }) {
-  const [title, setTitle] = useState(prefill?.need || '');
-  const [prio, setPrio] = useState('media');
-  const [need, setNeed] = useState(2);
-  const [loc, setLoc] = useState(prefill?.loc || '');
-  const [zone, setZone] = useState(prefill?.zone || 'caracas');
-  const [skill, setSkill] = useState('');
+function CreateModal({ prefill, editing, onClose, onSave }) {
+  const isEdit = !!editing;
+  const [title, setTitle] = useState(editing?.title || prefill?.need || '');
+  const [prio, setPrio] = useState(editing?.prio || 'media');
+  const [need, setNeed] = useState(editing?.need ?? 2);
+  const [loc, setLoc] = useState(editing?.loc || prefill?.loc || '');
+  const [zone, setZone] = useState(editing?.zone || prefill?.zone || 'caracas');
+  const [skill, setSkill] = useState(editing?.skill || '');
   return (
     <div className="modal-bg show" onClick={(e) => { if (e.target.classList.contains('modal-bg')) onClose(); }}>
       <div className="modal">
-        <h3>{prefill ? 'Validar y crear tarea' : 'Crear tarea'}</h3>
-        <div className="sub">{prefill ? 'Desde reporte ciudadano' : 'Nueva tarea para el tablero'}</div>
+        <h3>{isEdit ? 'Editar tarea' : prefill ? 'Validar y crear tarea' : 'Crear tarea'}</h3>
+        <div className="sub">{isEdit ? 'Cambia lo que necesites de esta tarea' : prefill ? 'Desde reporte ciudadano' : 'Nueva tarea para el tablero'}</div>
         <div className="field"><label>Título</label><input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. Repartir agua" /></div>
         <div className="g2">
           <div className="field"><label>Prioridad</label><select className="input" value={prio} onChange={(e) => setPrio(e.target.value)}><option value="alta">🔴 Alta</option><option value="media">🟡 Media</option><option value="baja">🟢 Baja</option></select></div>
@@ -1224,7 +1232,7 @@ function CreateModal({ prefill, onClose, onSave }) {
         </div>
         <div className="actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-take" disabled={!title.trim()} onClick={() => { if (!title.trim()) return; onSave({ title: title.trim(), prio, need, loc: loc.trim() || ZONES[zone].name, zone, skill: skill || null }, prefill); }}>{prefill ? '✓ Crear' : 'Publicar tarea'}</button>
+          <button className="btn btn-take" disabled={!title.trim()} onClick={() => { if (!title.trim()) return; onSave({ title: title.trim(), prio, need, loc: loc.trim() || ZONES[zone].name, zone, skill: skill || null }, prefill); }}>{isEdit ? 'Guardar cambios' : prefill ? '✓ Crear' : 'Publicar tarea'}</button>
         </div>
       </div>
     </div>
