@@ -4,7 +4,7 @@
    Perfil unificado: una persona (nombre, teléfono, cédula) puede AYUDAR
    como voluntario y/o REPORTAR. El perfil es el mismo y cuenta ambas.
    ===================================================================== */
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import TaskCard from './components/TaskCard';
 import TaskDetail from './components/TaskDetail';
 import MyTaskCard from './components/MyTaskCard';
@@ -921,6 +921,7 @@ function ReportArea({ myReports, onSend, onSwitch, userPos, requestGeo }) {
   const [sentId, setSentId] = useState(() => { try { return localStorage.getItem(REPORT_KEY) || null; } catch { return null; } });
   const [sentReport, setSentReport] = useState(null);
   const [sending, setSending] = useState(false); // evita reportes duplicados por doble toque
+  const sendingRef = useRef(false);               // lock síncrono (más robusto que el estado)
   const mine = [...(myReports || [])];
 
   // Tiempo real del reporte enviado: el ciudadano ve cuándo es evaluado.
@@ -962,13 +963,14 @@ function ReportArea({ myReports, onSend, onSwitch, userPos, requestGeo }) {
   };
 
   const submit = async () => {
-    if (!need.trim() || sending) return; // guard: no permitir doble envío
+    if (!need.trim() || sendingRef.current) return; // guard síncrono: no permitir doble envío
+    sendingRef.current = true;
     setSending(true);
     try {
       const id = await onSend({ need: need.trim(), loc: loc.trim(), zone: zone || 'caracas', note: note.trim(), lat: coords?.lat ?? null, lng: coords?.lng ?? null });
       setNeed(''); setLoc(''); setZone(''); setCoords(null); setNote(''); setGeoMsg('');
       if (id) { setSentId(id); try { localStorage.setItem(REPORT_KEY, id); } catch {} }
-    } finally { setSending(false); }
+    } finally { sendingRef.current = false; setSending(false); }
   };
 
   const reportAnother = () => { setSentId(null); try { localStorage.removeItem(REPORT_KEY); } catch {} };
