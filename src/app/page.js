@@ -25,6 +25,11 @@ const VISIT_KEY = 'tablero_visit_v1';     // ya se registró la visita única
 // Código de acceso del coordinador (solo la organización). Cámbialo aquí.
 const ADMIN_CODE = 'acacio';
 
+// Interruptor de la sección de Aportes/Donaciones. En false NO se muestra
+// ninguna entrada de donar en la app (todo el código queda intacto, solo
+// oculto). Cambiar a true para reactivarla.
+const DONATE_ON = false;
+
 // Semilla de demo SOLO en desarrollo (localhost). En producción la app
 // nunca crea tareas/voluntarios ficticios — arranca con datos reales.
 const SEED_ENABLED =
@@ -111,7 +116,7 @@ export default function Page() {
       } catch {}
       // Retorno desde el checkout de PagueloFácil (pago con tarjeta).
       try {
-        const ap = new URLSearchParams(window.location.search).get('aporte');
+        const ap = DONATE_ON ? new URLSearchParams(window.location.search).get('aporte') : null;
         if (ap) {
           if (ap === 'ok') {
             setRole('donante');
@@ -338,7 +343,7 @@ export default function Page() {
             isAdmin={isAdmin}
             onCoordinator={() => { if (isAdmin) { setRole('coordinador'); setCoordTab('tablero'); } else setAdminGate(true); }}
           />
-        ) : role === 'donante' ? (
+        ) : role === 'donante' && DONATE_ON ? (
           <DonateView config={donConfig} donations={myDonations} onPick={setDonMethod} isAdmin={isAdmin} onEditConfig={() => setDonConfigModal(true)} />
         ) : role === 'coordinador' ? (
           <Coordinador {...{ tasks, reports, volunteers, suggestions, visitsCount, registered: helpers, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, announcements, isAdmin, onAddInfo: () => setAnnounceModal({}), onEditInfo: (a) => setAnnounceModal(a), onRemoveInfo: removeAnnouncement, onEditCoord: () => setEditCoord(true), onOpenVol: setDetailVol, onSuggestStatus: async (id, st) => { await store.setSuggestionStatus(id, st); setSuggestions((s) => s.map((x) => (x.id === id ? { ...x, status: st } : x))); }, openCreate: (p) => setModal({ prefill: p || null }), onConvert: (r) => setModal({ prefill: r }), onDiscard: async (id) => { await store.setReportStatus(id, 'descartado'); refresh(); } }} />
@@ -422,11 +427,13 @@ function RoleLanding({ onPick, onDonate, isAdmin, onCoordinator }) {
             </button>
           ))}
         </div>
-        <button className="donate-cta" onClick={onDonate}>
-          <span className="dc-ic">💜</span>
-          <span className="dc-txt"><b>¿Estás fuera o quieres aportar dinero?</b><span>Tu donación ayuda a reconstruir y acompañar a las familias damnificadas.</span></span>
-          <span className="dc-go">Donar →</span>
-        </button>
+        {DONATE_ON && (
+          <button className="donate-cta" onClick={onDonate}>
+            <span className="dc-ic">💜</span>
+            <span className="dc-txt"><b>¿Estás fuera o quieres aportar dinero?</b><span>Tu donación ayuda a reconstruir y acompañar a las familias damnificadas.</span></span>
+            <span className="dc-go">Donar →</span>
+          </button>
+        )}
       </div>
 
       {/* Pie: disclaimer + acceso discreto del coordinador (solo emoji) */}
@@ -1016,7 +1023,7 @@ function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boa
         <div className="prof-stats">
           <button className="ps help" onClick={verCompletadas} title="Ver tus tareas completadas"><b>{counters.done}</b><span>Ayudas ›</span></button>
           <div className="ps rep"><b>{counters.reports}</b><span>Reportes</span></div>
-          <button className="ps don" onClick={() => setMode('donante')} title="Ver tus aportes"><b>{(myDonations || []).length}</b><span>Aportes ›</span></button>
+          {DONATE_ON && <button className="ps don" onClick={() => setMode('donante')} title="Ver tus aportes"><b>{(myDonations || []).length}</b><span>Aportes ›</span></button>}
         </div>
         <button className="prof-edit-ic" onClick={onEditProfile} title="Editar mis datos" aria-label="Editar mis datos">✏️</button>
       </div>
@@ -1024,14 +1031,14 @@ function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boa
       <div className="subtabs mode-switch">
         <button className={mode === 'voluntario' ? 'active' : ''} onClick={() => { setMode('voluntario'); setVolView('board'); }}>🙋 Ayudar</button>
         <button className={mode === 'reportante' ? 'active' : ''} onClick={() => setMode('reportante')}>📢 Reportar</button>
-        <button className={mode === 'donante' ? 'active' : ''} onClick={() => setMode('donante')}>💜 Donar</button>
+        {DONATE_ON && <button className={mode === 'donante' ? 'active' : ''} onClick={() => setMode('donante')}>💜 Donar</button>}
       </div>
 
-      {mode === 'voluntario'
-        ? <VolunteerArea tasks={tasks} myTasks={myTasks} boardMore={boardMore} loadMore={loadMore} user={user} online={online} volView={volView} setVolView={setVolView} h={h} coord={coord} announcements={announcements} isAdmin={isAdmin} onEditInfo={onEditInfo} onRemoveInfo={onRemoveInfo} userPos={userPos} geoState={geoState} requestGeo={requestGeo} />
-        : mode === 'reportante'
+      {mode === 'reportante'
         ? <ReportArea myReports={myReports} onSend={onSendReport} onSwitch={() => setMode('voluntario')} userPos={userPos} requestGeo={requestGeo} />
-        : <DonateArea config={donConfig} donations={myDonations} onPick={onPickDonate} isAdmin={isAdmin} onEditConfig={onEditDonConfig} />}
+        : (mode === 'donante' && DONATE_ON)
+        ? <DonateArea config={donConfig} donations={myDonations} onPick={onPickDonate} isAdmin={isAdmin} onEditConfig={onEditDonConfig} />
+        : <VolunteerArea tasks={tasks} myTasks={myTasks} boardMore={boardMore} loadMore={loadMore} user={user} online={online} volView={volView} setVolView={setVolView} h={h} coord={coord} announcements={announcements} isAdmin={isAdmin} onEditInfo={onEditInfo} onRemoveInfo={onRemoveInfo} userPos={userPos} geoState={geoState} requestGeo={requestGeo} />}
 
       <div className="suggest-cta">
         <span>¿Una idea para mejorar la app?</span>
