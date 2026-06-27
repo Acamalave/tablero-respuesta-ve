@@ -125,12 +125,29 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // ───────────────────────── config (contacto del coordinador) ─────────────────────────
+    // ───────────────────────── donations (aportes autoinformados) ─────────────────────────
+    match /donations/{id} {
+      allow read:   if true;
+      allow create: if request.resource.data.keys().hasOnly(['donorUid','donorName','method','amount','reference','created'])
+        && (request.resource.data.donorUid == null || (request.resource.data.donorUid is string && request.resource.data.donorUid.size() <= 60))
+        && ostr(request.resource.data,'donorName',120)
+        && request.resource.data.method in ['pagomovil','transferencia','tarjeta']
+        && ostr(request.resource.data,'amount',40)
+        && ostr(request.resource.data,'reference',120)
+        && request.resource.data.created is int;
+      allow update, delete: if false;
+    }
+
+    // ───────────────────────── config (coordinador + datos de aportes) ─────────────────────────
     match /config/{id} {
       allow read:  if true;
-      allow write: if request.resource.data.keys().hasOnly(['name','phone'])
-        && ostr(request.resource.data,'name',120)
-        && ostr(request.resource.data,'phone',40);
+      allow write: if
+        (request.resource.data.keys().hasOnly(['name','phone'])
+          && ostr(request.resource.data,'name',120) && ostr(request.resource.data,'phone',40))
+        || (request.resource.data.keys().hasOnly(['pmPhone','pmId','pmBank','bankAccount','bankHolder','bankId','bankType','pfLink'])
+          && ostr(request.resource.data,'pmPhone',60) && ostr(request.resource.data,'pmId',40) && ostr(request.resource.data,'pmBank',60)
+          && ostr(request.resource.data,'bankAccount',60) && ostr(request.resource.data,'bankHolder',120) && ostr(request.resource.data,'bankId',40) && ostr(request.resource.data,'bankType',40)
+          && ostr(request.resource.data,'pfLink',300));
       allow delete: if false;
     }
 

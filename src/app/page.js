@@ -54,6 +54,10 @@ export default function Page() {
   const [suggestions, setSuggestions] = useState([]); // sugerencias (coordinador)
   const [announcements, setAnnouncements] = useState([]); // info para difundir
   const [announceModal, setAnnounceModal] = useState(null); // admin: null | {} (nuevo) | anuncio (editar)
+  const [donConfig, setDonConfig] = useState(null);   // datos de pago para aportes
+  const [myDonations, setMyDonations] = useState([]); // aportes de este dispositivo
+  const [donMethod, setDonMethod] = useState(null);   // método a confirmar (modal de aporte)
+  const [donConfigModal, setDonConfigModal] = useState(false); // admin: editar datos de aportes
   const [visitsCount, setVisitsCount] = useState(0);  // KPI: personas únicas que ingresaron
   const [suggestModal, setSuggestModal] = useState(false); // usuario: enviar sugerencia
   const [detailVol, setDetailVol] = useState(null);   // coordinador: perfil en vista previa
@@ -93,6 +97,8 @@ export default function Page() {
       try { const c = await store.fetchCoordContact(); if (c && c.phone) setCoord(c); } catch {}
       try { const n = await store.fetchHelpersCount(); setHelpers(n); } catch {}
       try { if (!localStorage.getItem(VISIT_KEY)) { await store.recordVisit(myUid); localStorage.setItem(VISIT_KEY, '1'); } } catch {}
+      try { const dc = await store.fetchDonationConfig(); if (dc) setDonConfig(dc); } catch {}
+      try { setMyDonations(await store.fetchMyDonations(myUid)); } catch {}
       try {
         const saved = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
         const admin = localStorage.getItem(ADMIN_KEY) === '1';
@@ -261,6 +267,21 @@ export default function Page() {
     pushToast('Información quitada', 'Ya no se muestra.', '✅', 'Coordinador');
   };
 
+  // Donante registra un aporte (autoinformado)
+  const saveDonation = async ({ method, name, amount, reference }) => {
+    await store.createDonation({ uid, name: name || user?.name || '', method, amount, reference });
+    setDonMethod(null);
+    try { setMyDonations(await store.fetchMyDonations(uid)); } catch {}
+    pushToast('¡Gracias de corazón! 💜', 'Tu aporte ya está ayudando a reconstruir Venezuela.', '🙏', 'Aporte recibido');
+  };
+  // Coordinador guarda los datos de pago para aportes
+  const saveDonConfig = async (c) => {
+    await store.saveDonationConfig(c);
+    setDonConfig(c);
+    setDonConfigModal(false);
+    pushToast('Datos de aportes guardados', 'Ya se puede donar con estos métodos.', '💜', 'Coordinador');
+  };
+
   // Coordinador edita el perfil de OTRA persona (desde la vista previa)
   const saveVolunteerAdmin = async (profile, targetUid) => {
     await store.upsertVolunteer({ ...profile, uid: targetUid });
@@ -299,13 +320,16 @@ export default function Page() {
         ) : !role ? (
           <RoleLanding
             onPick={(r) => { setRole('usuario'); setMode(r); setVolView('board'); }}
+            onDonate={() => setRole('donante')}
             isAdmin={isAdmin}
             onCoordinator={() => { if (isAdmin) { setRole('coordinador'); setCoordTab('tablero'); } else setAdminGate(true); }}
           />
+        ) : role === 'donante' ? (
+          <DonateView config={donConfig} donations={myDonations} onPick={setDonMethod} isAdmin={isAdmin} onEditConfig={() => setDonConfigModal(true)} />
         ) : role === 'coordinador' ? (
           <Coordinador {...{ tasks, reports, volunteers, suggestions, visitsCount, registered: helpers, stats, boardMore, loadMore, coordTab, setCoordTab, h, coord, announcements, isAdmin, onAddInfo: () => setAnnounceModal({}), onEditInfo: (a) => setAnnounceModal(a), onRemoveInfo: removeAnnouncement, onEditCoord: () => setEditCoord(true), onOpenVol: setDetailVol, onSuggestStatus: async (id, st) => { await store.setSuggestionStatus(id, st); setSuggestions((s) => s.map((x) => (x.id === id ? { ...x, status: st } : x))); }, openCreate: (p) => setModal({ prefill: p || null }), onConvert: (r) => setModal({ prefill: r }), onDiscard: async (id) => { await store.setReportStatus(id, 'descartado'); refresh(); } }} />
         ) : user ? (
-          <Usuario {...{ user: { ...user, uid }, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, uid, online, volView, setVolView, h, coord, announcements, isAdmin, onEditInfo: (a) => setAnnounceModal(a), onRemoveInfo: removeAnnouncement, onEditProfile: () => setEditProfile(true), onSuggest: () => setSuggestModal(true), onSendReport: sendReport, userPos, geoState, requestGeo }} />
+          <Usuario {...{ user: { ...user, uid }, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, uid, online, volView, setVolView, h, coord, announcements, isAdmin, onEditInfo: (a) => setAnnounceModal(a), onRemoveInfo: removeAnnouncement, onEditProfile: () => setEditProfile(true), onSuggest: () => setSuggestModal(true), onSendReport: sendReport, userPos, geoState, requestGeo, donConfig, myDonations, onPickDonate: setDonMethod, onEditDonConfig: () => setDonConfigModal(true) }} />
         ) : (
           <Registro initialMode={mode} onDone={register} />
         )}
@@ -327,6 +351,8 @@ export default function Page() {
       {editCoord && <CoordContactModal coord={coord} onClose={() => setEditCoord(false)} onSave={saveCoord} />}
       {suggestModal && <SuggestionModal onClose={() => setSuggestModal(false)} onSend={sendSuggestion} />}
       {announceModal && <AnnounceModal initial={announceModal} onClose={() => setAnnounceModal(null)} onSave={saveAnnouncement} />}
+      {donMethod && <DonationConfirmModal method={donMethod} config={donConfig} defaultName={user?.name || ''} onClose={() => setDonMethod(null)} onSave={saveDonation} />}
+      {donConfigModal && <DonationConfigModal config={donConfig} onClose={() => setDonConfigModal(false)} onSave={saveDonConfig} />}
       {detailVol && <VolunteerDetail vol={detailVol} onClose={() => setDetailVol(null)} onSave={saveVolunteerAdmin} />}
 
       {adminGate && <AdminGate onClose={() => setAdminGate(false)} onOk={() => {
@@ -362,7 +388,7 @@ export default function Page() {
 /* ====================================================================
    PANTALLA INICIAL — selección (2 íconos) + disclaimer al fondo
    ==================================================================== */
-function RoleLanding({ onPick, isAdmin, onCoordinator }) {
+function RoleLanding({ onPick, onDonate, isAdmin, onCoordinator }) {
   return (
     <section className="landing view">
       {/* Bloque centrado vertical y horizontalmente */}
@@ -382,6 +408,11 @@ function RoleLanding({ onPick, isAdmin, onCoordinator }) {
             </button>
           ))}
         </div>
+        <button className="donate-cta" onClick={onDonate}>
+          <span className="dc-ic">💜</span>
+          <span className="dc-txt"><b>¿Estás fuera o quieres aportar dinero?</b><span>Tu donación ayuda a reconstruir y acompañar a las familias damnificadas.</span></span>
+          <span className="dc-go">Donar →</span>
+        </button>
       </div>
 
       {/* Pie: disclaimer + acceso discreto del coordinador (solo emoji) */}
@@ -399,6 +430,167 @@ function RoleLanding({ onPick, isAdmin, onCoordinator }) {
         </button>
       </div>
     </section>
+  );
+}
+
+/* ====================================================================
+   APORTES / DONACIONES — diáspora y quienes colaboran con dinero
+   ==================================================================== */
+const DON_METHOD = {
+  pagomovil:     { label: 'Pago móvil', icon: '📲' },
+  transferencia: { label: 'Transferencia · Bancamiga', icon: '🏦' },
+  tarjeta:       { label: 'Tarjeta de crédito', icon: '💳' },
+};
+
+function DonateView(props) {
+  return <section className="view"><DonateArea {...props} /></section>;
+}
+
+function DonateArea({ config, donations, onPick, isAdmin, onEditConfig }) {
+  const configured = !!(config && (config.pmPhone || config.bankAccount || config.pfLink));
+  const total = donations?.length || 0;
+  return (
+    <div className="donate">
+      <div className="donate-hero">
+        <div className="dh-emoji">💜</div>
+        <h2>Tu aporte reconstruye Venezuela</h2>
+        <p>Cada bolívar y cada dólar se convierte en <b>agua, comida, medicinas, techo y abrazos</b> para las familias, las niñas y los niños damnificados, y para los centros que hoy más lo necesitan.</p>
+        <p className="dh-mission">Esto <b>no termina hoy ni mañana</b>. Reconstruir y acompañar toma tiempo — y con <b>organización</b> lo vamos a lograr juntos. Ese es el corazón de <b>Tarea: Venezuela</b>. Gracias por ser parte. 🇻🇪</p>
+      </div>
+
+      {isAdmin && <div className="donate-admin"><button className="btn btn-ghost btn-sm" onClick={onEditConfig}>⚙️ Datos de aportes</button></div>}
+
+      {total > 0 && (
+        <div className="donate-thanks">🙏 <b>¡Gracias de corazón!</b> Ya has aportado {total} {total === 1 ? 'vez' : 'veces'}. Tu generosidad sostiene esta red. Si puedes y quieres, puedes <b>aportar de nuevo</b> 💜.</div>
+      )}
+
+      {!configured ? (
+        <div className="panel donate-soon">
+          <div className="big">💜</div>
+          <div className="et">Estamos habilitando los aportes</div>
+          En breve podrás colaborar por pago móvil, transferencia y tarjeta. Gracias por tu disposición de ayudar a Venezuela.
+        </div>
+      ) : (
+        <div className="donate-methods">
+          <div className="dm-head">Elige cómo quieres aportar:</div>
+          {config.pmPhone && <button className="dm" onClick={() => onPick('pagomovil')}><span className="dm-ic">📲</span><span className="dm-main"><b>Pago móvil</b><span>Desde tu banco en Venezuela</span></span><span className="dm-go">›</span></button>}
+          {config.bankAccount && <button className="dm" onClick={() => onPick('transferencia')}><span className="dm-ic">🏦</span><span className="dm-main"><b>Transferencia · Bancamiga</b><span>Cuenta en bolívares</span></span><span className="dm-go">›</span></button>}
+          {config.pfLink && <button className="dm" onClick={() => onPick('tarjeta')}><span className="dm-ic">💳</span><span className="dm-main"><b>Tarjeta de crédito</b><span>Desde cualquier país · PagueloFácil</span></span><span className="dm-go">›</span></button>}
+        </div>
+      )}
+
+      {total > 0 && (
+        <div className="donate-history">
+          <div className="dh-title">Tus aportes</div>
+          {donations.map((d) => (
+            <div className="dh-row" key={d.id}>
+              <span className="dh-m">{DON_METHOD[d.method]?.icon} {DON_METHOD[d.method]?.label || d.method}</span>
+              <span className="dh-d">{d.amount ? `${d.amount} · ` : ''}{ago(d.created)}</span>
+            </div>
+          ))}
+          <p className="dh-note">Cada aporte cuenta y ninguno se olvida. Gracias por seguir aquí. 💜</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Muestra los datos del método y registra el aporte (autoinformado).
+function DonationConfirmModal({ method, config, defaultName, onClose, onSave }) {
+  const [name, setName] = useState(defaultName || '');
+  const [amount, setAmount] = useState('');
+  const [reference, setReference] = useState('');
+  const [copied, setCopied] = useState('');
+  const copy = (v, k) => { try { navigator.clipboard?.writeText(v); setCopied(k); setTimeout(() => setCopied(''), 1400); } catch {} };
+  const Field = ({ k, label, value }) => (
+    <div className="dc-field"><span className="dc-k">{label}</span><span className="dc-v">{value}</span>
+      <button className="dc-copy" onClick={() => copy(value, k)}>{copied === k ? '✓' : 'Copiar'}</button></div>
+  );
+  const M = DON_METHOD[method];
+  return (
+    <div className="modal-bg show" onClick={(e) => { if (e.target.classList.contains('modal-bg')) onClose(); }}>
+      <div className="modal modal-scroll" style={{ maxWidth: 500 }}>
+        <h3>{M.icon} {M.label}</h3>
+        <div className="sub">Haz tu aporte con estos datos y luego regístralo aquí. ¡Gracias por ayudar! 💜</div>
+
+        {method === 'pagomovil' && (
+          <div className="dc-details">
+            {config.pmBank && <Field k="b" label="Banco" value={config.pmBank} />}
+            <Field k="p" label="Teléfono" value={config.pmPhone} />
+            {config.pmId && <Field k="i" label="Cédula / RIF" value={config.pmId} />}
+          </div>
+        )}
+        {method === 'transferencia' && (
+          <div className="dc-details">
+            <Field k="a" label="Cuenta Bancamiga" value={config.bankAccount} />
+            {config.bankType && <Field k="t" label="Tipo" value={config.bankType} />}
+            {config.bankHolder && <Field k="h" label="Titular" value={config.bankHolder} />}
+            {config.bankId && <Field k="r" label="RIF / Cédula" value={config.bankId} />}
+          </div>
+        )}
+        {method === 'tarjeta' && (
+          <div className="dc-card">
+            <p>Paga con tarjeta de crédito o débito de forma segura a través de <b>PagueloFácil</b>. Ideal si estás fuera de Venezuela.</p>
+            <a className="btn btn-take btn-block" href={config.pfLink} target="_blank" rel="noopener noreferrer">💳 Pagar con tarjeta</a>
+          </div>
+        )}
+
+        <div className="dc-reg">
+          <div className="dc-reg-t">Registra tu aporte <span className="hint">para que aparezca en tu historial</span></div>
+          <div className="field"><label>Tu nombre <span className="hint">opcional</span></label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="¿Cómo te agradecemos?" maxLength={120} /></div>
+          <div className="g2">
+            <div className="field"><label>Monto <span className="hint">opcional</span></label><input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Ej. 20$ / 500 Bs" maxLength={40} /></div>
+            <div className="field"><label>Referencia <span className="hint">opcional</span></label><input className="input" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="N° de operación" maxLength={120} /></div>
+          </div>
+        </div>
+
+        <div className="actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cerrar</button>
+          <button className="btn btn-take" onClick={() => onSave({ method, name: name.trim(), amount: amount.trim(), reference: reference.trim() })}>Ya hice mi aporte 💜</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Coordinador: datos de pago para aportes (pago móvil, Bancamiga, PagueloFácil).
+function DonationConfigModal({ config, onClose, onSave }) {
+  const [c, setC] = useState({
+    pmPhone: config?.pmPhone || '', pmId: config?.pmId || '', pmBank: config?.pmBank || '',
+    bankAccount: config?.bankAccount || '', bankHolder: config?.bankHolder || '', bankId: config?.bankId || '', bankType: config?.bankType || '',
+    pfLink: config?.pfLink || '',
+  });
+  const set = (k) => (e) => setC((p) => ({ ...p, [k]: e.target.value }));
+  return (
+    <div className="modal-bg show" onClick={(e) => { if (e.target.classList.contains('modal-bg')) onClose(); }}>
+      <div className="modal modal-scroll" style={{ maxWidth: 520 }}>
+        <h3>💜 Datos de aportes</h3>
+        <div className="sub">Lo que cargues aquí es lo que verán quienes quieran donar. Deja en blanco un método para ocultarlo.</div>
+
+        <div className="vd-section">📲 Pago móvil</div>
+        <div className="g2">
+          <div className="field"><label>Teléfono</label><input className="input" value={c.pmPhone} onChange={set('pmPhone')} placeholder="0412 1234567" /></div>
+          <div className="field"><label>Cédula / RIF</label><input className="input" value={c.pmId} onChange={set('pmId')} placeholder="V-12345678" /></div>
+        </div>
+        <div className="field"><label>Banco</label><input className="input" value={c.pmBank} onChange={set('pmBank')} placeholder="Ej. Bancamiga (0172)" /></div>
+
+        <div className="vd-section">🏦 Transferencia · Bancamiga</div>
+        <div className="field"><label>Número de cuenta</label><input className="input" value={c.bankAccount} onChange={set('bankAccount')} placeholder="0172 ..." /></div>
+        <div className="g2">
+          <div className="field"><label>Titular</label><input className="input" value={c.bankHolder} onChange={set('bankHolder')} placeholder="Nombre / organización" /></div>
+          <div className="field"><label>RIF / Cédula</label><input className="input" value={c.bankId} onChange={set('bankId')} placeholder="J-12345678-9" /></div>
+        </div>
+        <div className="field"><label>Tipo de cuenta</label><input className="input" value={c.bankType} onChange={set('bankType')} placeholder="Corriente / Ahorro" /></div>
+
+        <div className="vd-section">💳 Tarjeta · PagueloFácil</div>
+        <div className="field"><label>Enlace de pago</label><input className="input" value={c.pfLink} onChange={set('pfLink')} placeholder="https://pagar.paguelofacil.com/..." inputMode="url" /></div>
+
+        <div className="actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-take" onClick={() => onSave(c)}>Guardar</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -761,7 +953,7 @@ function Registro({ initialMode, onDone }) {
 /* ====================================================================
    USUARIO — perfil unificado con switch Ayudar / Reportar
    ==================================================================== */
-function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, online, volView, setVolView, h, coord, announcements, isAdmin, onEditInfo, onRemoveInfo, onEditProfile, onSuggest, onSendReport, userPos, geoState, requestGeo }) {
+function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boardMore, loadMore, online, volView, setVolView, h, coord, announcements, isAdmin, onEditInfo, onRemoveInfo, onEditProfile, onSuggest, onSendReport, userPos, geoState, requestGeo, donConfig, myDonations, onPickDonate, onEditDonConfig }) {
   // El contador de "Ayudas" lleva a las tareas completadas.
   const verCompletadas = () => { setMode('voluntario'); setVolView('completadas'); };
   return (
@@ -774,6 +966,7 @@ function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boa
         <div className="prof-stats">
           <button className="ps help" onClick={verCompletadas} title="Ver tus tareas completadas"><b>{counters.done}</b><span>Ayudas ›</span></button>
           <div className="ps rep"><b>{counters.reports}</b><span>Reportes</span></div>
+          <button className="ps don" onClick={() => setMode('donante')} title="Ver tus aportes"><b>{(myDonations || []).length}</b><span>Aportes ›</span></button>
         </div>
         <button className="prof-edit-ic" onClick={onEditProfile} title="Editar mis datos" aria-label="Editar mis datos">✏️</button>
       </div>
@@ -781,11 +974,14 @@ function Usuario({ user, counters, mode, setMode, tasks, myTasks, myReports, boa
       <div className="subtabs mode-switch">
         <button className={mode === 'voluntario' ? 'active' : ''} onClick={() => { setMode('voluntario'); setVolView('board'); }}>🙋 Ayudar</button>
         <button className={mode === 'reportante' ? 'active' : ''} onClick={() => setMode('reportante')}>📢 Reportar</button>
+        <button className={mode === 'donante' ? 'active' : ''} onClick={() => setMode('donante')}>💜 Donar</button>
       </div>
 
       {mode === 'voluntario'
         ? <VolunteerArea tasks={tasks} myTasks={myTasks} boardMore={boardMore} loadMore={loadMore} user={user} online={online} volView={volView} setVolView={setVolView} h={h} coord={coord} announcements={announcements} isAdmin={isAdmin} onEditInfo={onEditInfo} onRemoveInfo={onRemoveInfo} userPos={userPos} geoState={geoState} requestGeo={requestGeo} />
-        : <ReportArea myReports={myReports} onSend={onSendReport} onSwitch={() => setMode('voluntario')} userPos={userPos} requestGeo={requestGeo} />}
+        : mode === 'reportante'
+        ? <ReportArea myReports={myReports} onSend={onSendReport} onSwitch={() => setMode('voluntario')} userPos={userPos} requestGeo={requestGeo} />
+        : <DonateArea config={donConfig} donations={myDonations} onPick={onPickDonate} isAdmin={isAdmin} onEditConfig={onEditDonConfig} />}
 
       <div className="suggest-cta">
         <span>¿Una idea para mejorar la app?</span>

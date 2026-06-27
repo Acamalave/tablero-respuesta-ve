@@ -23,7 +23,9 @@ const VOLS = collection(db, 'volunteers');
 const VISITS = collection(db, 'visits');           // personas únicas que ingresaron
 const SUGGESTIONS = collection(db, 'suggestions');  // sugerencias de usuarios al coordinador
 const ANNOUNCEMENTS = collection(db, 'announcements'); // tarjetas de información (difundir)
+const DONATIONS = collection(db, 'donations');      // aportes registrados
 const COORD_DOC = doc(db, 'config', 'coordinator');
+const DON_DOC = doc(db, 'config', 'donations');     // datos de pago para aportes
 
 export const PAGE = 20; // tamaño de página del tablero
 
@@ -190,6 +192,43 @@ export async function fetchAnnouncements(max = 20) {
 export const updateAnnouncement = (id, text) => updateDoc(doc(ANNOUNCEMENTS, id), { text }).catch(() => {});
 // "Quitar" = ocultar (soft-delete) para no borrar de verdad.
 export const hideAnnouncement = (id) => updateDoc(doc(ANNOUNCEMENTS, id), { active: false }).catch(() => {});
+
+/* ----- Aportes / donaciones ----- */
+// Datos de pago (editables por el coordinador): pago móvil, Bancamiga, PagueloFácil.
+export async function fetchDonationConfig() {
+  try { const s = await getDoc(DON_DOC); return s.exists() ? s.data() : null; } catch { return null; }
+}
+export async function saveDonationConfig(c) {
+  await setDoc(DON_DOC, {
+    pmPhone: c.pmPhone || '', pmId: c.pmId || '', pmBank: c.pmBank || '',
+    bankAccount: c.bankAccount || '', bankHolder: c.bankHolder || '', bankId: c.bankId || '', bankType: c.bankType || '',
+    pfLink: c.pfLink || '',
+  }, { merge: true });
+}
+// Registrar un aporte (autoinformado por el donante).
+export async function createDonation(data) {
+  const ref = doc(DONATIONS);
+  await setDoc(ref, {
+    donorUid: data.uid || null, donorName: data.name || '',
+    method: data.method || '', amount: data.amount || '', reference: data.reference || '',
+    created: Date.now(),
+  });
+  return ref.id;
+}
+export async function fetchMyDonations(uid) {
+  if (!uid) return [];
+  try {
+    const s = await getDocs(query(DONATIONS, where('donorUid', '==', uid), limit(40)));
+    return s.docs.map(row).sort((a, b) => (b.created || 0) - (a.created || 0));
+  } catch { return []; }
+}
+export async function fetchDonationsCount() {
+  try { return (await getCountFromServer(DONATIONS)).data().count; } catch { return 0; }
+}
+export async function fetchDonations(max = 60) {
+  try { const s = await getDocs(query(DONATIONS, limit(max))); return s.docs.map(row).sort((a, b) => (b.created || 0) - (a.created || 0)); }
+  catch { return []; }
+}
 
 // Contacto del coordinador (editable) — mostrado a los voluntarios.
 export async function fetchCoordContact() {
