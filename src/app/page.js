@@ -109,6 +109,20 @@ export default function Page() {
         else if (saved) setRole('usuario');
         if (!localStorage.getItem(WELCOME_KEY)) setShowWelcome(true); // primera visita
       } catch {}
+      // Retorno desde el checkout de PagueloFácil (pago con tarjeta).
+      try {
+        const ap = new URLSearchParams(window.location.search).get('aporte');
+        if (ap) {
+          if (ap === 'ok') {
+            setRole('donante');
+            pushToast('¡Gracias de corazón! 💜', 'Tu pago con tarjeta fue verificado. Tu aporte ya ayuda a reconstruir Venezuela.', '✔', 'Aporte verificado');
+            try { setMyDonations(await store.fetchMyDonations(myUid)); } catch {}
+          } else {
+            pushToast('Pago no completado', 'No se concretó el pago con tarjeta. Puedes intentarlo de nuevo cuando quieras. 💜', '⚠️', 'Aporte');
+          }
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      } catch {}
       setReady(true);
     })();
     const tick = setInterval(() => forceTick((n) => n + 1), 60000); // solo refresca "hace X min"
@@ -351,7 +365,7 @@ export default function Page() {
       {editCoord && <CoordContactModal coord={coord} onClose={() => setEditCoord(false)} onSave={saveCoord} />}
       {suggestModal && <SuggestionModal onClose={() => setSuggestModal(false)} onSend={sendSuggestion} />}
       {announceModal && <AnnounceModal initial={announceModal} onClose={() => setAnnounceModal(null)} onSave={saveAnnouncement} />}
-      {donMethod && <DonationConfirmModal method={donMethod} config={donConfig} defaultName={user?.name || ''} onClose={() => setDonMethod(null)} onSave={saveDonation} />}
+      {donMethod && <DonationConfirmModal method={donMethod} config={donConfig} defaultName={user?.name || ''} uid={uid} onClose={() => setDonMethod(null)} onSave={saveDonation} />}
       {donConfigModal && <DonationConfigModal config={donConfig} onClose={() => setDonConfigModal(false)} onSave={saveDonConfig} />}
       {detailVol && <VolunteerDetail vol={detailVol} onClose={() => setDetailVol(null)} onSave={saveVolunteerAdmin} />}
 
@@ -447,7 +461,7 @@ function DonateView(props) {
 }
 
 function DonateArea({ config, donations, onPick, isAdmin, onEditConfig }) {
-  const configured = !!(config && (config.pmPhone || config.bankAccount || config.pfLink));
+  const configured = !!(config && (config.pmPhone || config.bankAccount || config.cardEnabled));
   const total = donations?.length || 0;
   return (
     <div className="donate">
@@ -475,7 +489,7 @@ function DonateArea({ config, donations, onPick, isAdmin, onEditConfig }) {
           <div className="dm-head">Elige cómo quieres aportar:</div>
           {config.pmPhone && <button className="dm" onClick={() => onPick('pagomovil')}><span className="dm-ic">📲</span><span className="dm-main"><b>Pago móvil</b><span>Desde tu banco en Venezuela</span></span><span className="dm-go">›</span></button>}
           {config.bankAccount && <button className="dm" onClick={() => onPick('transferencia')}><span className="dm-ic">🏦</span><span className="dm-main"><b>Transferencia · Bancamiga</b><span>Cuenta en bolívares</span></span><span className="dm-go">›</span></button>}
-          {config.pfLink && <button className="dm" onClick={() => onPick('tarjeta')}><span className="dm-ic">💳</span><span className="dm-main"><b>Tarjeta de crédito</b><span>Desde cualquier país · PagueloFácil</span></span><span className="dm-go">›</span></button>}
+          {config.cardEnabled && <button className="dm" onClick={() => onPick('tarjeta')}><span className="dm-ic">💳</span><span className="dm-main"><b>Tarjeta de crédito</b><span>Desde cualquier país · pago verificado ✔</span></span><span className="dm-go">›</span></button>}
         </div>
       )}
 
@@ -484,7 +498,8 @@ function DonateArea({ config, donations, onPick, isAdmin, onEditConfig }) {
           <div className="dh-title">Tus aportes</div>
           {donations.map((d) => (
             <div className="dh-row" key={d.id}>
-              <span className="dh-m">{DON_METHOD[d.method]?.icon} {DON_METHOD[d.method]?.label || d.method}</span>
+              <span className="dh-m">{DON_METHOD[d.method]?.icon} {DON_METHOD[d.method]?.label || d.method}
+                {d.verified && <span className="dh-ok" title="Pago verificado">✔ Verificado</span>}</span>
               <span className="dh-d">{d.amount ? `${d.amount} · ` : ''}{ago(d.created)}</span>
             </div>
           ))}
@@ -495,23 +510,43 @@ function DonateArea({ config, donations, onPick, isAdmin, onEditConfig }) {
   );
 }
 
-// Muestra los datos del método y registra el aporte (autoinformado).
-function DonationConfirmModal({ method, config, defaultName, onClose, onSave }) {
+// Tarjeta: cobro VERIFICADO vía PagueloFácil (checkout). Otros métodos:
+// muestra los datos y el donante registra su aporte (autoinformado).
+function DonationConfirmModal({ method, config, defaultName, uid, onClose, onSave }) {
   const [name, setName] = useState(defaultName || '');
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
   const [copied, setCopied] = useState('');
+  const [paying, setPaying] = useState(false);
+  const [err, setErr] = useState('');
   const copy = (v, k) => { try { navigator.clipboard?.writeText(v); setCopied(k); setTimeout(() => setCopied(''), 1400); } catch {} };
   const Field = ({ k, label, value }) => (
     <div className="dc-field"><span className="dc-k">{label}</span><span className="dc-v">{value}</span>
       <button className="dc-copy" onClick={() => copy(value, k)}>{copied === k ? '✓' : 'Copiar'}</button></div>
   );
   const M = DON_METHOD[method];
+  const isCard = method === 'tarjeta';
+
+  const pay = async () => {
+    const amt = parseFloat((amount || '').replace(',', '.'));
+    if (!amt || amt < 1) { setErr('Indica el monto en USD (mínimo $1).'); return; }
+    setErr(''); setPaying(true);
+    try {
+      const url = await store.createCardPayment({ amount: amt, uid, name: name.trim() });
+      window.location.href = url; // al checkout de PagueloFácil
+    } catch {
+      setErr('No se pudo iniciar el pago. Intenta de nuevo en un momento.');
+      setPaying(false);
+    }
+  };
+
   return (
     <div className="modal-bg show" onClick={(e) => { if (e.target.classList.contains('modal-bg')) onClose(); }}>
       <div className="modal modal-scroll" style={{ maxWidth: 500 }}>
         <h3>{M.icon} {M.label}</h3>
-        <div className="sub">Haz tu aporte con estos datos y luego regístralo aquí. ¡Gracias por ayudar! 💜</div>
+        <div className="sub">{isCard
+          ? 'Pago seguro y verificado con tarjeta de crédito o débito, desde cualquier país. ¡Gracias por ayudar! 💜'
+          : 'Haz tu aporte con estos datos y luego regístralo aquí. ¡Gracias por ayudar! 💜'}</div>
 
         {method === 'pagomovil' && (
           <div className="dc-details">
@@ -528,26 +563,37 @@ function DonationConfirmModal({ method, config, defaultName, onClose, onSave }) 
             {config.bankId && <Field k="r" label="RIF / Cédula" value={config.bankId} />}
           </div>
         )}
-        {method === 'tarjeta' && (
-          <div className="dc-card">
-            <p>Paga con tarjeta de crédito o débito de forma segura a través de <b>PagueloFácil</b>. Ideal si estás fuera de Venezuela.</p>
-            <a className="btn btn-take btn-block" href={config.pfLink} target="_blank" rel="noopener noreferrer">💳 Pagar con tarjeta</a>
+
+        {isCard ? (
+          <div className="dc-pay">
+            <div className="field"><label>Monto a donar <span className="hint">en dólares (USD)</span></label>
+              <div className="dc-amt"><span className="dc-cur">$</span>
+                <input className="input" type="number" min="1" step="1" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="20" inputMode="decimal" autoFocus /></div>
+            </div>
+            <div className="field"><label>Tu nombre <span className="hint">opcional</span></label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="¿Cómo te agradecemos?" maxLength={120} /></div>
+            <p className="dc-secure">🔒 Te llevaremos al pago seguro de <b>PagueloFácil</b>. Al confirmarse, tu aporte queda <b>verificado ✔</b> y aparece en tu historial.</p>
+            {err && <div className="dc-err">{err}</div>}
+            <div className="actions">
+              <button className="btn btn-ghost" onClick={onClose} disabled={paying}>Cerrar</button>
+              <button className="btn btn-take" onClick={pay} disabled={paying}>{paying ? 'Conectando…' : '💳 Pagar con tarjeta'}</button>
+            </div>
           </div>
+        ) : (
+          <>
+            <div className="dc-reg">
+              <div className="dc-reg-t">Registra tu aporte <span className="hint">para que aparezca en tu historial</span></div>
+              <div className="field"><label>Tu nombre <span className="hint">opcional</span></label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="¿Cómo te agradecemos?" maxLength={120} /></div>
+              <div className="g2">
+                <div className="field"><label>Monto <span className="hint">opcional</span></label><input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Ej. 20$ / 500 Bs" maxLength={40} /></div>
+                <div className="field"><label>Referencia <span className="hint">opcional</span></label><input className="input" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="N° de operación" maxLength={120} /></div>
+              </div>
+            </div>
+            <div className="actions">
+              <button className="btn btn-ghost" onClick={onClose}>Cerrar</button>
+              <button className="btn btn-take" onClick={() => onSave({ method, name: name.trim(), amount: amount.trim(), reference: reference.trim() })}>Ya hice mi aporte 💜</button>
+            </div>
+          </>
         )}
-
-        <div className="dc-reg">
-          <div className="dc-reg-t">Registra tu aporte <span className="hint">para que aparezca en tu historial</span></div>
-          <div className="field"><label>Tu nombre <span className="hint">opcional</span></label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="¿Cómo te agradecemos?" maxLength={120} /></div>
-          <div className="g2">
-            <div className="field"><label>Monto <span className="hint">opcional</span></label><input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Ej. 20$ / 500 Bs" maxLength={40} /></div>
-            <div className="field"><label>Referencia <span className="hint">opcional</span></label><input className="input" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="N° de operación" maxLength={120} /></div>
-          </div>
-        </div>
-
-        <div className="actions">
-          <button className="btn btn-ghost" onClick={onClose}>Cerrar</button>
-          <button className="btn btn-take" onClick={() => onSave({ method, name: name.trim(), amount: amount.trim(), reference: reference.trim() })}>Ya hice mi aporte 💜</button>
-        </div>
       </div>
     </div>
   );
@@ -558,7 +604,7 @@ function DonationConfigModal({ config, onClose, onSave }) {
   const [c, setC] = useState({
     pmPhone: config?.pmPhone || '', pmId: config?.pmId || '', pmBank: config?.pmBank || '',
     bankAccount: config?.bankAccount || '', bankHolder: config?.bankHolder || '', bankId: config?.bankId || '', bankType: config?.bankType || '',
-    pfLink: config?.pfLink || '',
+    pfLink: config?.pfLink || '', cardEnabled: !!config?.cardEnabled,
   });
   const set = (k) => (e) => setC((p) => ({ ...p, [k]: e.target.value }));
   return (
@@ -582,8 +628,12 @@ function DonationConfigModal({ config, onClose, onSave }) {
         </div>
         <div className="field"><label>Tipo de cuenta</label><input className="input" value={c.bankType} onChange={set('bankType')} placeholder="Corriente / Ahorro" /></div>
 
-        <div className="vd-section">💳 Tarjeta · PagueloFácil</div>
-        <div className="field"><label>Enlace de pago</label><input className="input" value={c.pfLink} onChange={set('pfLink')} placeholder="https://pagar.paguelofacil.com/..." inputMode="url" /></div>
+        <div className="vd-section">💳 Tarjeta · PagueloFácil <span className="vd-tag">pago verificado</span></div>
+        <label className="dc-toggle">
+          <input type="checkbox" checked={c.cardEnabled} onChange={(e) => setC((p) => ({ ...p, cardEnabled: e.target.checked }))} />
+          <span>Aceptar pagos con tarjeta (PagueloFácil)</span>
+        </label>
+        <p className="dc-note">Las credenciales de PagueloFácil (CCLW/token) se configuran de forma segura en el servidor (Firebase Secrets), no aquí. Activa esta casilla cuando el backend esté desplegado.</p>
 
         <div className="actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>

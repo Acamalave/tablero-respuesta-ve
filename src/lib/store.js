@@ -202,8 +202,20 @@ export async function saveDonationConfig(c) {
   await setDoc(DON_DOC, {
     pmPhone: c.pmPhone || '', pmId: c.pmId || '', pmBank: c.pmBank || '',
     bankAccount: c.bankAccount || '', bankHolder: c.bankHolder || '', bankId: c.bankId || '', bankType: c.bankType || '',
-    pfLink: c.pfLink || '',
+    pfLink: c.pfLink || '', cardEnabled: !!c.cardEnabled,
   }, { merge: true });
+}
+// Crea un cobro con tarjeta en PagueloFácil (vía Cloud Function) y devuelve la
+// URL de checkout de un solo uso. La verificación del pago la hace el backend.
+export async function createCardPayment({ amount, uid, name }) {
+  const r = await fetch('/pf/create', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount, donorUid: uid || '', donorName: name || '' }),
+  });
+  if (!r.ok) throw new Error('No se pudo iniciar el pago');
+  const j = await r.json();
+  if (!j.url) throw new Error('Respuesta inválida de la pasarela');
+  return j.url;
 }
 // Registrar un aporte (autoinformado por el donante).
 export async function createDonation(data) {

@@ -5,11 +5,19 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20"
+  },
   "hosting": {
     "public": "out",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "cleanUrls": true,
-    "rewrites": [{ "source": "**", "destination": "/index.html" }],
+    "rewrites": [
+      { "source": "/pf/create", "function": { "functionId": "createCardPayment", "region": "us-central1" } },
+      { "source": "/pf/return", "function": { "functionId": "pfReturn", "region": "us-central1" } },
+      { "source": "**", "destination": "/index.html" }
+    ],
     "headers": [
       {
         "source": "/manifest.webmanifest",
