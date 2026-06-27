@@ -214,7 +214,7 @@ export default function Page() {
     try { localStorage.setItem(USER_KEY, JSON.stringify(profile)); } catch {}
     const full = { ...profile, uid };
     setUser(full);
-    await store.upsertVolunteer({ ...full, done: 0, reports: 0 });
+    await store.upsertVolunteer({ ...full, done: 0, reports: 0, createdAt: Date.now() });
     await refresh();
     pushToast('¡Perfil creado!', 'Ya puedes ayudar y reportar con el mismo perfil.', '🙌', 'Bienvenido');
   };
@@ -920,6 +920,7 @@ function ReportArea({ myReports, onSend, onSwitch, userPos, requestGeo }) {
   const [geoMsg, setGeoMsg] = useState('');
   const [sentId, setSentId] = useState(() => { try { return localStorage.getItem(REPORT_KEY) || null; } catch { return null; } });
   const [sentReport, setSentReport] = useState(null);
+  const [sending, setSending] = useState(false); // evita reportes duplicados por doble toque
   const mine = [...(myReports || [])];
 
   // Tiempo real del reporte enviado: el ciudadano ve cuándo es evaluado.
@@ -961,10 +962,13 @@ function ReportArea({ myReports, onSend, onSwitch, userPos, requestGeo }) {
   };
 
   const submit = async () => {
-    if (!need.trim()) return;
-    const id = await onSend({ need: need.trim(), loc: loc.trim(), zone: zone || 'caracas', note: note.trim(), lat: coords?.lat ?? null, lng: coords?.lng ?? null });
-    setNeed(''); setLoc(''); setZone(''); setCoords(null); setNote(''); setGeoMsg('');
-    if (id) { setSentId(id); try { localStorage.setItem(REPORT_KEY, id); } catch {} }
+    if (!need.trim() || sending) return; // guard: no permitir doble envío
+    setSending(true);
+    try {
+      const id = await onSend({ need: need.trim(), loc: loc.trim(), zone: zone || 'caracas', note: note.trim(), lat: coords?.lat ?? null, lng: coords?.lng ?? null });
+      setNeed(''); setLoc(''); setZone(''); setCoords(null); setNote(''); setGeoMsg('');
+      if (id) { setSentId(id); try { localStorage.setItem(REPORT_KEY, id); } catch {} }
+    } finally { setSending(false); }
   };
 
   const reportAnother = () => { setSentId(null); try { localStorage.removeItem(REPORT_KEY); } catch {} };
@@ -1009,7 +1013,7 @@ function ReportArea({ myReports, onSend, onSwitch, userPos, requestGeo }) {
           </div>
         </div>
         <div className="field"><label>Nota <span className="hint">opcional</span></label><textarea className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Detalles que ayuden al coordinador…" /></div>
-        <button className="btn btn-take btn-block" disabled={!need.trim()} onClick={submit}>📨 Enviar reporte</button>
+        <button className="btn btn-take btn-block" disabled={!need.trim() || sending} onClick={submit}>{sending ? 'Enviando…' : '📨 Enviar reporte'}</button>
         <button className="btn btn-ghost btn-block" style={{ marginTop: 10 }} onClick={onSwitch}>🙋 Prefiero ayudar como voluntario</button>
       </div>
 
@@ -1106,9 +1110,10 @@ function Roster({ volunteers, onOpen }) {
   const norm = (s) => (s || '').toLowerCase();
   const query = norm(q.trim());
   const digits = (s) => (s || '').replace(/\D/g, '');
+  const ordered = [...volunteers].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)); // último registrado primero
   const filtered = query
-    ? volunteers.filter((v) => norm(v.name).includes(query) || (digits(v.cedula).includes(digits(query)) && digits(query)))
-    : volunteers;
+    ? ordered.filter((v) => norm(v.name).includes(query) || (digits(v.cedula).includes(digits(query)) && digits(query)))
+    : ordered;
   const list = filtered.slice(0, shown);
   return (
     <div>

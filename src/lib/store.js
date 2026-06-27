@@ -279,6 +279,7 @@ export async function upsertVolunteer(v) {
   const data = { name: v.name, zone: v.zone || null, skills: v.skills || [], phone: v.phone || '', cedula: v.cedula || '', cedulaNorm: normCedula(v.cedula) };
   if (typeof v.done === 'number') data.done = v.done;
   if (typeof v.reports === 'number') data.reports = v.reports;
+  if (typeof v.createdAt === 'number') data.createdAt = v.createdAt; // solo al crear (registro)
   await setDoc(doc(VOLS, v.uid), data, { merge: true });
 }
 export const bumpVolunteerDone = (uid) => updateDoc(doc(VOLS, uid), { done: increment(1) }).catch(() => {});
