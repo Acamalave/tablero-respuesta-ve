@@ -31,7 +31,7 @@ service cloud.firestore {
     // ───────────────────────── tasks ─────────────────────────
     function validTask(d) {
       return d.keys().hasOnly(['title','prio','zone','loc','need','skill','reporterName','reporterPhone','created','takenBy','status','state','active','takerUids'])
-        && str(d.title, 140) && d.title.size() >= 1
+        && str(d.title, 200) && d.title.size() >= 1
         && d.prio in ['alta','media','baja']
         && ostr(d,'zone',40) && ostr(d,'loc',200) && ostr(d,'skill',40)
         && d.need is int && d.need >= 1 && d.need <= 200

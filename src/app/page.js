@@ -1473,7 +1473,7 @@ function CreateModal({ prefill, editing, onClose, onSave }) {
       <div className="modal">
         <h3>{isEdit ? 'Editar tarea' : prefill ? 'Validar y crear tarea' : 'Crear tarea'}</h3>
         <div className="sub">{isEdit ? 'Cambia lo que necesites de esta tarea' : prefill ? 'Desde reporte ciudadano' : 'Nueva tarea para el tablero'}</div>
-        <div className="field"><label>Título</label><input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. Repartir agua" /></div>
+        <div className="field"><label>Título {title.length > 140 && <span className="hint">{title.length}/200</span>}</label><input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. Repartir agua" maxLength={200} /></div>
         <div className="g2">
           <div className="field"><label>Prioridad</label><select className="input" value={prio} onChange={(e) => setPrio(e.target.value)}><option value="alta">🔴 Alta</option><option value="media">🟡 Media</option><option value="baja">🟢 Baja</option></select></div>
           <div className="field"><label>Cupos</label><input className="input" type="number" min="1" value={need} onChange={(e) => setNeed(e.target.value)} /></div>
